@@ -19,6 +19,14 @@ It's open source under the MIT License. You're free to build on it, as long as y
     <td align="center">Dark</td>
     <td align="center">Green terminal</td>
   </tr>
+  <tr>
+    <td><img src="docs/screenshot-amber.png" alt="The same page in the amber terminal theme"></td>
+    <td><img src="docs/screenshot-contrast.png" alt="The same page in the high contrast theme"></td>
+  </tr>
+  <tr>
+    <td align="center">Amber terminal</td>
+    <td align="center">High contrast</td>
+  </tr>
 </table>
 
 > This is a hobby project. It catches a fair amount, but it is not a replacement for
@@ -66,7 +74,11 @@ The app needs tkinter. It ships with Python on Windows and macOS. On Linux you m
 ## The app
 
 The first time you open it, a short setup asks for your language (it starts in your system's
-language), a theme and a few preferences. After that, four pages, nothing hidden:
+language), a theme and a few preferences.
+
+![The theme step of the first-run setup, with all six themes](docs/screenshot-setup.png)
+
+After that, four pages, nothing hidden:
 
 - **Scan**: a quick scan of the usual hiding places, or any folder or file you pick. Findings can be
   quarantined, trusted (if it's a false positive) or opened in your file manager.
