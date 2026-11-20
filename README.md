@@ -1,6 +1,6 @@
 # WeDontLikeIt
 
-A small antivirus for Windows, macOS and Linux, written in plain Python with no dependencies.
+A small antivirus for Linux, Windows and macOS, written in plain Python with no dependencies.
 It runs entirely on your machine: no account, no cloud, no telemetry.
 
 It comes as a desktop app and as a command-line tool. Both use the same engine.
@@ -10,20 +10,30 @@ It comes as a desktop app and as a command-line tool. Both use the same engine.
 > This is a hobby project. It catches a fair amount, but it is not a replacement for
 > Windows Defender, XProtect or ClamAV. Keep those on.
 
+## Linux first
+
+WeDontLikeIt is developed on Linux, and Linux is where it gets used and tested the most. New
+features land there first, and Linux bugs get fixed first.
+
+Windows and macOS are supported too, not an afterthought: the same code runs on all three, the test
+suite runs on every one of them for every change, and each release ships builds for them. If something
+works on Linux but breaks on Windows or macOS, that's a bug, so please
+[open an issue](../../issues).
+
 ## Getting it
 
 Grab a build for your system from [Releases](../../releases). You don't need Python installed.
 
+- **Linux**: `WeDontLikeIt-linux` (app) or `wedontlikeit-cli-linux`
 - **Windows**: `WeDontLikeIt-windows.exe` (app) or `wedontlikeit-cli-windows.exe`
 - **macOS** (Apple Silicon): `WeDontLikeIt-macos-arm64.zip` (app) or `wedontlikeit-cli-macos-arm64`.
   On an Intel Mac, install from source (below).
-- **Linux**: `WeDontLikeIt-linux` (app) or `wedontlikeit-cli-linux`
 
 The builds aren't signed, so your system will complain the first time:
 
+- Linux: `chmod +x WeDontLikeIt-linux` first.
 - Windows SmartScreen: *More info*, then *Run anyway*.
 - macOS: right-click the app and choose *Open*, or run `xattr -dr com.apple.quarantine WeDontLikeIt.app`.
-- Linux: `chmod +x WeDontLikeIt-linux` first.
 
 Windows Defender sometimes flags PyInstaller builds as suspicious. That's a known false positive
 with PyInstaller, not something in this code, but if you'd rather not deal with it, install from source:
