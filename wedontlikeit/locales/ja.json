@@ -169,5 +169,21 @@
   "set.lang_note": "この翻訳は機械で作成されました。GitHub での修正を歓迎します。",
   "set.busy": "スキャンが終わるまでお待ちください。",
   "set.about": "このアプリについて",
-  "btn.open_data": "開く"
+  "set.rerun": "初期設定をやり直す",
+  "btn.open_data": "開く",
+
+  "setup.step": "ステップ {n} / {total}",
+  "setup.welcome_h": "WeDontLikeIt へようこそ。",
+  "setup.welcome_s": "いくつか選ぶだけで準備完了です。あとから「設定」でいつでも変更できます。",
+  "setup.lang_detected": "システムの設定から選びました。",
+  "setup.theme_h": "見た目を選んでください。",
+  "setup.theme_s": "クリックすると試せます。いつでも切り替えられます。",
+  "setup.prefs_h": "どこまで厳しくしますか？",
+  "setup.prefs_s": "多くの人にはこの設定で十分です。お好みで変更してください。",
+  "setup.watch": "アプリを開いている間、ダウンロードとデスクトップを監視する",
+  "setup.quick": "完了したらクイックスキャンを実行する",
+  "btn.next": "次へ",
+  "btn.back": "戻る",
+  "btn.finish": "使い始める",
+  "btn.skip": "セットアップをスキップ"
 }

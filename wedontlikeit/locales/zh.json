@@ -169,5 +169,21 @@
   "set.lang_note": "此翻译由机器生成，欢迎在 GitHub 上提交修正。",
   "set.busy": "请等扫描结束。",
   "set.about": "关于",
-  "btn.open_data": "打开"
+  "set.rerun": "重新进行初始设置",
+  "btn.open_data": "打开",
+
+  "setup.step": "第 {n} 步，共 {total} 步",
+  "setup.welcome_h": "欢迎使用 WeDontLikeIt。",
+  "setup.welcome_s": "做几个简单的选择就好。以后都可以在“设置”里修改。",
+  "setup.lang_detected": "根据你的系统设置选择。",
+  "setup.theme_h": "选一个外观。",
+  "setup.theme_s": "点一下即可试用，随时可以切换。",
+  "setup.prefs_h": "我们该多挑剔？",
+  "setup.prefs_s": "这些默认设置适合大多数人。按需修改即可。",
+  "setup.watch": "应用打开时监视我的下载和桌面文件夹",
+  "setup.quick": "完成后进行一次快速扫描",
+  "btn.next": "下一步",
+  "btn.back": "上一步",
+  "btn.finish": "开始使用",
+  "btn.skip": "跳过设置"
 }

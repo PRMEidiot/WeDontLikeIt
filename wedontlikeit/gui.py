@@ -271,7 +271,13 @@ class App:
             except Exception:  # noqa: BLE001
                 pass
         self.cfg = Config.load()
-        i18n.set_lang(i18n.resolve(None))
+        # Before the first-run setup, start in the system's language; afterwards, use the saved one.
+        self.detected_lang = None
+        if self.cfg.setup_done or os.environ.get("WEDONTLIKEIT_LANG"):
+            i18n.set_lang(i18n.resolve(None))
+        else:
+            self.detected_lang = i18n.system_language()
+            i18n.set_lang(self.detected_lang or "en")
         apply_theme(self.cfg.theme)
         if not self.cfg.watch_folders:
             self.cfg.watch_folders = [str(p) for p in platforms.watch_default_paths()]
@@ -301,7 +307,12 @@ class App:
         self.page = "scan"
         self.db_counts = self._db_counts()
 
-        self.build()
+        if self.cfg.setup_done:
+            self.build()
+        else:
+            self.setup_step = 0
+            self.setup_opts = {"watch": True, "quick": True}
+            self.show_setup()
         self.root.after(POLL_MS, self._drain)
 
     # ----------------------------------------------------------- look
@@ -335,6 +346,7 @@ class App:
             "mono_s": (mono, 8),
         }
         self.mono_char = tkfont.Font(font=self.f["mono"]).measure("0") or 7
+        self.families = {"sans": sans, "serif": serif, "mono": mono}
 
     def _style(self):
         s = ttk.Style(self.root)
@@ -364,6 +376,170 @@ class App:
         s.configure("TScrollbar", background=RULE, troughcolor=CARD, bordercolor=CARD, arrowcolor=MUTED)
         s.configure("TLabel", background=PAPER, foreground=INK)
         s.configure("TFrame", background=PAPER)
+
+    # ------------------------------------------------------ first run
+    SETUP_STEPS = 3
+
+    def show_setup(self):
+        """The first-run setup: language, theme, preferences."""
+        for w in self.root.winfo_children():
+            w.destroy()
+        step = self.setup_step
+        outer = tk.Frame(self.root, bg=PAPER)
+        outer.place(relx=0, rely=0, relwidth=1, relheight=1)
+
+        top = tk.Frame(outer, bg=PAPER)
+        top.pack(fill="x", padx=44, pady=(30, 0))
+        logo = tk.Canvas(top, width=22, height=22, bg=PAPER, highlightthickness=0)
+        logo.create_oval(2, 2, 20, 20, outline=ACCENT, width=2.6)
+        logo.create_line(5.6, 5.6, 16.4, 16.4, fill=ACCENT, width=2.6)
+        logo.pack(side="left")
+        tk.Label(top, text="WeDontLikeIt", bg=PAPER, fg=INK, font=self.f["mark"]).pack(side="left", padx=(10, 0))
+        tk.Label(top, text=t("setup.step", n=step + 1, total=self.SETUP_STEPS), bg=PAPER, fg=MUTED,
+                 font=self.f["small"]).pack(side="right")
+
+        bar = tk.Frame(outer, bg=PAPER)
+        bar.pack(fill="x", padx=44, pady=(18, 0))
+        for i in range(self.SETUP_STEPS):
+            tk.Frame(bar, bg=ACCENT if i <= step else RULE, height=3).pack(
+                side="left", fill="x", expand=True, padx=(0 if i == 0 else 6, 0))
+
+        foot = tk.Frame(outer, bg=PAPER)
+        foot.pack(side="bottom", fill="x", padx=44, pady=(0, 30))
+        if step == 0:
+            LinkButton(foot, t("btn.skip"), lambda: self.finish_setup(skipped=True), self.f["small"]).pack(side="left")
+        else:
+            FlatButton(foot, t("btn.back"), lambda: self._setup_go(-1), "secondary", self.f["body"]).pack(side="left")
+        last = step == self.SETUP_STEPS - 1
+        FlatButton(foot, t("btn.finish") if last else t("btn.next"),
+                   self.finish_setup if last else (lambda: self._setup_go(1)), "primary",
+                   self.f["body_b"]).pack(side="right")
+
+        body = tk.Frame(outer, bg=PAPER)
+        body.pack(fill="both", expand=True, padx=44, pady=(44, 0))
+        (self._setup_language, self._setup_theme, self._setup_prefs)[step](body)
+
+    def _setup_heading(self, body, title_key, sub_key):
+        tk.Label(body, text=t(title_key), bg=PAPER, fg=INK, font=self.f["h1"], anchor="w",
+                 justify="left").pack(anchor="w")
+        tk.Label(body, text=t(sub_key), bg=PAPER, fg=MUTED, font=self.f["body"], anchor="w", justify="left",
+                 wraplength=660).pack(anchor="w", pady=(6, 0))
+
+    def _setup_language(self, body):
+        self._setup_heading(body, "setup.welcome_h", "setup.welcome_s")
+        tk.Label(body, text=t("set.language"), bg=PAPER, fg=MUTED, font=self.f["small"]).pack(anchor="w", pady=(34, 4))
+        self._dropdown(body, [(name, code) for code, name in i18n.LANGS.items()], i18n.current(),
+                       self._setup_set_lang)
+        if self.detected_lang and self.detected_lang == i18n.current():
+            tk.Label(body, text=t("setup.lang_detected"), bg=PAPER, fg=FAINT, font=self.f["small"]).pack(
+                anchor="w", pady=(8, 0))
+        if i18n.current() not in i18n.HUMAN_TRANSLATED:
+            tk.Label(body, text=t("set.lang_note"), bg=PAPER, fg=FAINT, font=self.f["small"], wraplength=520,
+                     justify="left").pack(anchor="w", pady=(4, 0))
+
+    def _setup_theme(self, body):
+        self._setup_heading(body, "setup.theme_h", "setup.theme_s")
+        row = tk.Frame(body, bg=PAPER)
+        row.pack(anchor="w", pady=(32, 0))
+        for col, name in enumerate(THEMES):
+            selected = name == THEME
+            card = tk.Frame(row, bg=PAPER, highlightthickness=2, cursor="hand2",
+                            highlightbackground=ACCENT if selected else RULE, highlightcolor=ACCENT)
+            card.grid(row=0, column=col, padx=(0, 20), sticky="n")
+            preview = self._theme_preview(card, THEMES[name])
+            preview.pack()
+            label = tk.Label(card, text=("\u2713  " if selected else "") + t(f"theme.{name}"), bg=PAPER,
+                             fg=INK, font=self.f["body_b"] if selected else self.f["body"], pady=10, cursor="hand2")
+            label.pack(fill="x")
+            for w in (card, preview, label):
+                w.bind("<ButtonRelease-1>", lambda e, n=name: self._setup_set_theme(n))
+
+    def _theme_preview(self, parent, th):
+        """A tiny drawing of the app in a given theme."""
+        w, h = 228, 146
+        cv = tk.Canvas(parent, width=w, height=h, bg=th["PAPER"], highlightthickness=0, cursor="hand2")
+        cv.create_line(0, 18, w, 18, fill=th["RULE"])
+        cv.create_oval(8, 5, 16, 13, outline=th["ACCENT"], width=2)
+        cv.create_rectangle(22, 7, 64, 11, fill=th["INK"], outline="")
+        cv.create_line(58, 18, 58, h, fill=th["RULE"])
+        cv.create_rectangle(0, 28, 3, 40, fill=th["ACCENT"], outline="")
+        for k in range(4):
+            cv.create_rectangle(10, 32 + k * 14, 44 if k else 38, 36 + k * 14,
+                                fill=th["INK"] if k == 0 else th["MUTED"], outline="")
+        family = self.families["mono"] if th["MONO"] else self.families["serif"]
+        cv.create_text(70, 38, text="Aa", anchor="w", fill=th["RED"], font=(family, 15))
+        cv.create_rectangle(70, 54, 180, 57, fill=th["MUTED"], outline="")
+        cv.create_rectangle(70, 66, 112, 80, fill=th["INK"], outline="")
+        cv.create_rectangle(118, 66, 160, 80, fill=th["CARD"], outline=th["RULE"])
+        cv.create_rectangle(70, 92, w - 12, h - 12, fill=th["CARD"], outline=th["RULE"])
+        for k, color in enumerate((th["RED"], th["RED"], th["AMBER"])):
+            y = 101 + k * 11
+            cv.create_rectangle(78, y, 96, y + 3, fill=color, outline="")
+            cv.create_rectangle(104, y, 150 + (k % 2) * 20, y + 3, fill=color, outline="")
+        return cv
+
+    def _setup_prefs(self, body):
+        self._setup_heading(body, "setup.prefs_h", "setup.prefs_s")
+        box = tk.Frame(body, bg=PAPER)
+        box.pack(anchor="w", pady=(28, 0))
+
+        def cfg_setter(attr):
+            return lambda v: setattr(self.cfg, attr, v)
+
+        def opt_setter(key):
+            return lambda v: self.setup_opts.__setitem__(key, v)
+
+        items = [
+            (t("set.heuristics"), self.cfg.heuristics, cfg_setter("heuristics")),
+            (t("set.archives"), self.cfg.archives, cfg_setter("archives")),
+            (t("set.auto_q"), self.cfg.auto_quarantine, cfg_setter("auto_quarantine")),
+            (t("set.auto_q_medium"), self.cfg.quarantine_medium, cfg_setter("quarantine_medium")),
+            (t("setup.watch"), self.setup_opts["watch"], opt_setter("watch")),
+            (t("setup.quick"), self.setup_opts["quick"], opt_setter("quick")),
+        ]
+        for i, (text, value, setter) in enumerate(items):
+            if i == 4:
+                tk.Frame(box, bg=RULE, height=1).pack(fill="x", pady=(16, 4))
+            Check(box, text, value, setter, self.f["body"], wrap=640).pack(anchor="w", pady=(12, 0))
+
+    def rerun_setup(self):
+        if self.scan_state == "running":
+            return
+        self.setup_step = 0
+        self.setup_opts = {"watch": self.watch_stop is None, "quick": False}
+        self.detected_lang = i18n.system_language()
+        self.show_setup()
+
+    def _setup_go(self, delta):
+        self.setup_step = max(0, min(self.SETUP_STEPS - 1, self.setup_step + delta))
+        self.show_setup()
+
+    def _setup_set_lang(self, code):
+        i18n.set_lang(code)
+        self._fonts()
+        self._style()
+        self.show_setup()
+
+    def _setup_set_theme(self, name):
+        apply_theme(name)
+        self.root.configure(bg=PAPER)
+        self._dark_title_bar()
+        self._fonts()
+        self._style()
+        self.show_setup()
+
+    def finish_setup(self, skipped=False):
+        self.cfg.lang = i18n.current()
+        self.cfg.theme = THEME
+        self.cfg.setup_done = True
+        self.cfg.save()
+        self.page = "scan"
+        self.build()
+        if not skipped:
+            if self.setup_opts["watch"] and self.watch_stop is None:
+                self.start_watch()
+            if self.setup_opts["quick"]:
+                self.quick_scan()
 
     # ---------------------------------------------------------- layout
     def build(self):
@@ -977,6 +1153,7 @@ class App:
         drow.pack(anchor="w", pady=(6, 0))
         tk.Label(drow, text=_short_path(str(platforms.data_dir()), 52), bg=PAPER, fg=MUTED, font=self.f["mono"]).pack(side="left")
         LinkButton(drow, t("btn.open_data"), self.open_data_dir, self.f["small"]).pack(side="left", padx=(12, 0))
+        LinkButton(s, t("set.rerun"), self.rerun_setup, self.f["small"]).pack(anchor="w", pady=(10, 0))
         return page
 
     def _save_key(self):

@@ -169,5 +169,21 @@
   "set.lang_note": "Deze vertaling is door een machine gemaakt. Correcties zijn welkom op GitHub.",
   "set.busy": "Wacht tot de scan klaar is.",
   "set.about": "Over",
-  "btn.open_data": "Openen"
+  "set.rerun": "Eerste instelling opnieuw doen",
+  "btn.open_data": "Openen",
+
+  "setup.step": "Stap {n} van {total}",
+  "setup.welcome_h": "Welkom bij WeDontLikeIt.",
+  "setup.welcome_s": "Een paar snelle keuzes en je bent klaar. Je kunt dit later allemaal wijzigen in Instellingen.",
+  "setup.lang_detected": "Gekozen op basis van je systeeminstellingen.",
+  "setup.theme_h": "Kies een uiterlijk.",
+  "setup.theme_s": "Klik er een aan om het te proberen. Je kunt altijd wisselen.",
+  "setup.prefs_h": "Hoe kieskeurig moeten we zijn?",
+  "setup.prefs_s": "Deze standaardinstellingen werken voor de meeste mensen. Pas aan wat je wilt.",
+  "setup.watch": "Mijn Downloads en bureaublad bewaken zolang de app open is",
+  "setup.quick": "Een snelle scan doen als ik klaar ben",
+  "btn.next": "Volgende",
+  "btn.back": "Terug",
+  "btn.finish": "Aan de slag",
+  "btn.skip": "Instellen overslaan"
 }

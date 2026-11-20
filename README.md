@@ -54,7 +54,8 @@ The app needs tkinter. It ships with Python on Windows and macOS. On Linux you m
 
 ## The app
 
-Four pages, nothing hidden:
+The first time you open it, a short setup asks for your language (it starts in your system's
+language), a theme and a few preferences. After that, four pages, nothing hidden:
 
 - **Scan**: a quick scan of the usual hiding places, or any folder or file you pick. Findings can be
   quarantined, trusted (if it's a false positive) or opened in your file manager.

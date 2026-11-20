@@ -169,5 +169,21 @@
   "set.lang_note": "Esta traducción se hizo con una máquina. Las correcciones son bienvenidas en GitHub.",
   "set.busy": "Espera a que termine el análisis.",
   "set.about": "Acerca de",
-  "btn.open_data": "Abrir"
+  "set.rerun": "Repetir la configuración inicial",
+  "btn.open_data": "Abrir",
+
+  "setup.step": "Paso {n} de {total}",
+  "setup.welcome_h": "Te damos la bienvenida a WeDontLikeIt.",
+  "setup.welcome_s": "Unas pocas decisiones rápidas y listo. Puedes cambiar todo esto después en Ajustes.",
+  "setup.lang_detected": "Elegido según la configuración de tu sistema.",
+  "setup.theme_h": "Elige un aspecto.",
+  "setup.theme_s": "Haz clic en uno para probarlo. Puedes cambiarlo cuando quieras.",
+  "setup.prefs_h": "¿Qué tan exigentes somos?",
+  "setup.prefs_s": "Estos valores sirven para la mayoría. Cambia lo que quieras.",
+  "setup.watch": "Vigilar mis carpetas Descargas y Escritorio mientras la aplicación esté abierta",
+  "setup.quick": "Hacer un análisis rápido al terminar",
+  "btn.next": "Siguiente",
+  "btn.back": "Atrás",
+  "btn.finish": "Empezar a usarlo",
+  "btn.skip": "Omitir configuración"
 }

@@ -169,5 +169,21 @@
   "set.lang_note": "This translation was machine-made. Corrections are welcome on GitHub.",
   "set.busy": "Wait for the scan to finish first.",
   "set.about": "About",
-  "btn.open_data": "Open"
+  "set.rerun": "Run the first-time setup again",
+  "btn.open_data": "Open",
+
+  "setup.step": "Step {n} of {total}",
+  "setup.welcome_h": "Welcome to WeDontLikeIt.",
+  "setup.welcome_s": "A few quick choices and you're set. You can change all of this later in Settings.",
+  "setup.lang_detected": "Picked from your system settings.",
+  "setup.theme_h": "Pick a look.",
+  "setup.theme_s": "Click one to try it. You can switch any time.",
+  "setup.prefs_h": "How picky should we be?",
+  "setup.prefs_s": "These defaults work for most people. Change whatever you like.",
+  "setup.watch": "Watch my Downloads and Desktop while the app is open",
+  "setup.quick": "Run a quick scan when I'm done",
+  "btn.next": "Next",
+  "btn.back": "Back",
+  "btn.finish": "Start using it",
+  "btn.skip": "Skip setup"
 }

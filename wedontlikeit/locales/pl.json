@@ -169,5 +169,21 @@
   "set.lang_note": "To tłumaczenie wykonała maszyna. Poprawki są mile widziane na GitHubie.",
   "set.busy": "Poczekaj, aż skanowanie się skończy.",
   "set.about": "O programie",
-  "btn.open_data": "Otwórz"
+  "set.rerun": "Uruchom ponownie konfigurację początkową",
+  "btn.open_data": "Otwórz",
+
+  "setup.step": "Krok {n} z {total}",
+  "setup.welcome_h": "Witamy w WeDontLikeIt.",
+  "setup.welcome_s": "Kilka szybkich wyborów i gotowe. Wszystko to możesz później zmienić w Ustawieniach.",
+  "setup.lang_detected": "Wybrano na podstawie ustawień systemu.",
+  "setup.theme_h": "Wybierz wygląd.",
+  "setup.theme_s": "Kliknij jeden, aby go wypróbować. Możesz go zmienić w każdej chwili.",
+  "setup.prefs_h": "Jak bardzo mamy się czepiać?",
+  "setup.prefs_s": "Te ustawienia pasują większości osób. Zmień, co chcesz.",
+  "setup.watch": "Obserwuj moje foldery Pobrane i Pulpit, gdy aplikacja jest otwarta",
+  "setup.quick": "Wykonaj szybkie skanowanie, gdy skończę",
+  "btn.next": "Dalej",
+  "btn.back": "Wstecz",
+  "btn.finish": "Zaczynamy",
+  "btn.skip": "Pomiń konfigurację"
 }

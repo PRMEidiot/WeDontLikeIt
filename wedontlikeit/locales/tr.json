@@ -169,5 +169,21 @@
   "set.lang_note": "Bu çeviri makine tarafından yapıldı. Düzeltmelerinizi GitHub'da bekliyoruz.",
   "set.busy": "Önce taramanın bitmesini bekleyin.",
   "set.about": "Hakkında",
-  "btn.open_data": "Aç"
+  "set.rerun": "İlk kurulumu yeniden yap",
+  "btn.open_data": "Aç",
+
+  "setup.step": "Adım {n} / {total}",
+  "setup.welcome_h": "WeDontLikeIt'e hoş geldiniz.",
+  "setup.welcome_s": "Birkaç hızlı seçim ve hazırsınız. Bunların hepsini daha sonra Ayarlar'dan değiştirebilirsiniz.",
+  "setup.lang_detected": "Sistem ayarlarınıza göre seçildi.",
+  "setup.theme_h": "Bir görünüm seçin.",
+  "setup.theme_s": "Denemek için birine tıklayın. İstediğiniz zaman değiştirebilirsiniz.",
+  "setup.prefs_h": "Ne kadar titiz olalım?",
+  "setup.prefs_s": "Bu varsayılanlar çoğu kişi için uygundur. İstediğinizi değiştirin.",
+  "setup.watch": "Uygulama açıkken İndirilenler ve Masaüstü klasörlerimi izle",
+  "setup.quick": "Bitirince hızlı bir tarama yap",
+  "btn.next": "İleri",
+  "btn.back": "Geri",
+  "btn.finish": "Kullanmaya başla",
+  "btn.skip": "Kurulumu atla"
 }

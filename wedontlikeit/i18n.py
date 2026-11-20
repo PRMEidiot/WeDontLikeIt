@@ -11,7 +11,11 @@ Integers passed to ``t()`` are formatted the way that language writes numbers.
 from __future__ import annotations
 
 import json
+import locale
 import os
+import re
+import subprocess
+import sys
 from functools import lru_cache
 from importlib import resources
 
@@ -105,6 +109,45 @@ def normalize(value: str | None) -> str | None:
         return value
     base = value.split(".", 1)[0].split("-", 1)[0]
     return base if base in LANGS else None
+
+
+def _system_candidates() -> list[str]:
+    """Language tags the operating system reports, most preferred first."""
+    cands: list[str] = []
+    if sys.platform == "win32":
+        try:
+            import ctypes
+
+            lcid = ctypes.windll.kernel32.GetUserDefaultUILanguage()  # the display language
+            cands.append(locale.windows_locale.get(lcid, ""))
+        except Exception:  # noqa: BLE001
+            pass
+    elif sys.platform == "darwin":
+        try:
+            out = subprocess.run(["defaults", "read", "-g", "AppleLanguages"], capture_output=True,
+                                 text=True, timeout=3).stdout
+            cands += re.findall(r'"?([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*)"?\s*[,)]', out)
+        except Exception:  # noqa: BLE001
+            pass
+    # Linux and other Unixes (and a fallback everywhere). LANGUAGE is a ':'-separated list.
+    for var in ("LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG"):
+        value = os.environ.get(var)
+        if value:
+            cands += value.split(":")
+    try:
+        cands.append(locale.getlocale()[0] or "")
+    except (ValueError, TypeError):
+        pass
+    return [c for c in cands if c and c.split(".")[0] not in ("C", "POSIX")]
+
+
+def system_language() -> str | None:
+    """The first system language we have a translation for, or None."""
+    for cand in _system_candidates():
+        code = normalize(cand)
+        if code:
+            return code
+    return None
 
 
 def resolve(cli_value: str | None) -> str:

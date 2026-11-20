@@ -13,6 +13,7 @@ from . import platforms
 class Config:
     lang: str = "en"
     theme: str = "light"                   # light | dark | terminal
+    setup_done: bool = False               # the first-run setup in the app has been completed
     heuristics: bool = True
     archives: bool = True
     auto_quarantine: bool = False          # quarantine high-severity detections

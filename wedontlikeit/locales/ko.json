@@ -169,5 +169,21 @@
   "set.lang_note": "이 번역은 기계로 만들어졌습니다. GitHub에서 수정 제안을 환영합니다.",
   "set.busy": "검사가 끝날 때까지 기다려 주세요.",
   "set.about": "정보",
-  "btn.open_data": "열기"
+  "set.rerun": "처음 설정 다시 하기",
+  "btn.open_data": "열기",
+
+  "setup.step": "{total}단계 중 {n}단계",
+  "setup.welcome_h": "WeDontLikeIt에 오신 것을 환영합니다.",
+  "setup.welcome_s": "몇 가지만 고르면 준비 끝입니다. 나중에 설정에서 언제든 바꿀 수 있습니다.",
+  "setup.lang_detected": "시스템 설정에 맞춰 골랐습니다.",
+  "setup.theme_h": "모양을 고르세요.",
+  "setup.theme_s": "눌러서 바로 확인해 보세요. 언제든 바꿀 수 있습니다.",
+  "setup.prefs_h": "얼마나 깐깐하게 볼까요?",
+  "setup.prefs_s": "대부분의 사람에게 맞는 기본값입니다. 원하는 대로 바꾸세요.",
+  "setup.watch": "앱이 열려 있는 동안 다운로드와 바탕 화면 감시",
+  "setup.quick": "끝나면 빠른 검사 실행",
+  "btn.next": "다음",
+  "btn.back": "뒤로",
+  "btn.finish": "사용 시작",
+  "btn.skip": "설정 건너뛰기"
 }

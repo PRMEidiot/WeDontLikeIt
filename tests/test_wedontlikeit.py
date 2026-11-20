@@ -478,6 +478,24 @@ class TestI18n(Base):
         self.assertEqual(i18n.t("header.sigs", n=1), "1 signature")
         self.assertEqual(i18n.t("header.sigs", n=1234), "1,234 signatures")
 
+    def test_system_language(self):
+        with mock.patch.object(i18n, "_system_candidates", return_value=["C.UTF-8", "fr_CA.UTF-8", "de_DE"]):
+            self.assertEqual(i18n.system_language(), "fr")
+        with mock.patch.object(i18n, "_system_candidates", return_value=["xx_YY", "eo"]):
+            self.assertIsNone(i18n.system_language())
+
+    def test_system_language_from_linux_env(self):
+        if not sys.platform.startswith("linux"):
+            self.skipTest("Linux only")
+        env = {"LANGUAGE": "pt_BR:pt:en", "LC_ALL": "", "LC_MESSAGES": "", "LANG": "en_US.UTF-8"}
+        with mock.patch.dict(os.environ, env):
+            self.assertEqual(i18n.system_language(), "pt")
+
+    def test_setup_flag(self):
+        self.assertFalse(Config.load().setup_done)
+        Config(setup_done=True, lang="ja").save()
+        self.assertTrue(Config.load().setup_done)
+
     def test_normalize(self):
         self.assertEqual(i18n.normalize("pt_BR.UTF-8"), "pt")
         self.assertEqual(i18n.normalize("zh-CN"), "zh")
