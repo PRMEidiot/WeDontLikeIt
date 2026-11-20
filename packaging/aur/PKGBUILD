@@ -11,7 +11,7 @@ depends=('python' 'tk' 'hicolor-icon-theme')
 makedepends=('python-build' 'python-installer' 'python-wheel' 'python-setuptools')
 optdepends=('python-yara: YARA rule support')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('9c4cf88f2e1de3340406141385fa7f88871362574fa3a8c46737a1fe4323652a')
 
 build() {
   cd "WeDontLikeIt-$pkgver"
