@@ -1,5 +1,5 @@
 # Builds the desktop app and the command-line tool for Windows, macOS and Linux.
-# Run it by hand from the Actions tab, or push a tag: git tag v0.3.0 && git push --tags
+# Run it by hand from the Actions tab, or push a tag: git tag v0.3.1 && git push --tags
 name: release
 
 on:
@@ -31,15 +31,20 @@ jobs:
         shell: bash
         run: |
           pip install . pyinstaller==6.11.1
-          pyinstaller --onefile --name wedontlikeit --collect-data wedontlikeit run.py
-          pyinstaller --onefile --windowed --name WeDontLikeIt --collect-data wedontlikeit run_gui.py
+          # Separate folders and names: Windows and macOS file names ignore case, so
+          # "wedontlikeit" and "WeDontLikeIt" would overwrite each other.
+          pyinstaller --onefile --name wedontlikeit-cli --collect-data wedontlikeit \
+            --distpath build-cli/dist --workpath build-cli/work --specpath build-cli run.py
+          pyinstaller --onefile --windowed --name WeDontLikeIt --collect-data wedontlikeit \
+            --distpath build-gui/dist --workpath build-gui/work --specpath build-gui run_gui.py
           mkdir out
-          mv "dist/wedontlikeit${{ matrix.exe }}" "out/wedontlikeit-cli-${{ matrix.name }}${{ matrix.exe }}"
+          mv "build-cli/dist/wedontlikeit-cli${{ matrix.exe }}" "out/wedontlikeit-cli-${{ matrix.name }}${{ matrix.exe }}"
           if [ "$RUNNER_OS" = "macOS" ]; then
-            ditto -c -k --keepParent dist/WeDontLikeIt.app "out/WeDontLikeIt-${{ matrix.name }}.zip"
+            ditto -c -k --keepParent build-gui/dist/WeDontLikeIt.app "out/WeDontLikeIt-${{ matrix.name }}.zip"
           else
-            mv "dist/WeDontLikeIt${{ matrix.exe }}" "out/WeDontLikeIt-${{ matrix.name }}${{ matrix.exe }}"
+            mv "build-gui/dist/WeDontLikeIt${{ matrix.exe }}" "out/WeDontLikeIt-${{ matrix.name }}${{ matrix.exe }}"
           fi
+          ls -la out
       - name: Smoke test (must flag EICAR)
         shell: bash
         run: |

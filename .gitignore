@@ -8,3 +8,6 @@ venv/
 .pytest_cache/
 *.spec
 .wedontlikeit-build/
+build-cli/
+build-gui/
+out/
