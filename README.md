@@ -5,6 +5,9 @@ It runs entirely on your machine: no account, no cloud, no telemetry.
 
 It comes as a desktop app and as a command-line tool. Both use the same engine.
 
+It's open source under the MIT License. You're free to build on it, as long as you give credit
+([details](#open-source-and-giving-credit)).
+
 ![The scan page after finding a few things](docs/screenshot.png)
 
 > This is a hobby project. It catches a fair amount, but it is not a replacement for
@@ -191,6 +194,21 @@ sample. The existing tests show how to break a sample up so it only becomes "rea
 Ideas that would make it better: native file watching (inotify, FSEvents, ReadDirectoryChangesW)
 instead of polling, `.rar`/`.7z`/`.tar.gz` support, importing ClamAV signatures.
 
-## License
+## Open source, and giving credit
 
-MIT
+WeDontLikeIt is open source under the [MIT License](LICENSE). You can use it, change it, ship it
+inside your own project and even sell that project. You don't need to ask.
+
+There is one condition, and it isn't optional: **if you use this code, or a substantial part of it,
+as the base of your own project, you have to give credit.** In practice that means keeping the
+copyright notice and the MIT license text from [`LICENSE`](LICENSE) in your copy of the code.
+If you ship a compiled program, include them alongside it too, for example in your docs or a
+"licenses" screen. That's what the MIT License requires: without the notice, you don't have
+permission to use the code.
+
+Beyond that, a visible line in your README such as
+"Based on [WeDontLikeIt](https://github.com/PRMEidiot/WeDontLikeIt)" isn't required, but it's
+very much appreciated.
+
+If you're only borrowing an idea (how the zip-bomb check works, say) and writing your own code,
+you don't owe anything. A mention is still nice.
