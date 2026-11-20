@@ -1,5 +1,5 @@
 # Builds the desktop app and the command-line tool for Windows, macOS and Linux.
-# Run it by hand from the Actions tab, or push a tag: git tag v0.3.1 && git push --tags
+# Run it by hand from the Actions tab, or push a tag: git tag v0.3.2 && git push --tags
 name: release
 
 on:
@@ -21,7 +21,6 @@ jobs:
           - { os: ubuntu-latest,  name: linux,       exe: "" }
           - { os: windows-latest, name: windows,     exe: ".exe" }
           - { os: macos-latest,   name: macos-arm64, exe: "" }
-          - { os: macos-13,       name: macos-x64,   exe: "" }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

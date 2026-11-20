@@ -15,7 +15,8 @@ It comes as a desktop app and as a command-line tool. Both use the same engine.
 Grab a build for your system from [Releases](../../releases). You don't need Python installed.
 
 - **Windows**: `WeDontLikeIt-windows.exe` (app) or `wedontlikeit-cli-windows.exe`
-- **macOS**: `WeDontLikeIt-macos-arm64.zip` (Apple Silicon) or `WeDontLikeIt-macos-x64.zip` (Intel)
+- **macOS** (Apple Silicon): `WeDontLikeIt-macos-arm64.zip` (app) or `wedontlikeit-cli-macos-arm64`.
+  On an Intel Mac, install from source (below).
 - **Linux**: `WeDontLikeIt-linux` (app) or `wedontlikeit-cli-linux`
 
 The builds aren't signed, so your system will complain the first time:
@@ -170,7 +171,7 @@ wedontlikeit/
   config.py      saved settings
 ```
 
-GitHub Actions runs the tests on Windows, macOS and Linux on every push. Pushing a tag like `v0.3.1`
+GitHub Actions runs the tests on Windows, macOS and Linux on every push. Pushing a tag like `v0.3.2`
 builds the apps and attaches them to a release.
 
 One rule worth knowing: the test suite scans the project itself and fails if anything is flagged.
