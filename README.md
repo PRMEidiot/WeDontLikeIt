@@ -8,7 +8,18 @@ It comes as a desktop app and as a command-line tool. Both use the same engine.
 It's open source under the MIT License. You're free to build on it, as long as you give credit
 ([details](#open-source-and-giving-credit)).
 
-![The scan page after finding a few things](docs/screenshot.png)
+![The scan page after finding a few things, in the light theme](docs/screenshot-light.png)
+
+<table>
+  <tr>
+    <td><img src="docs/screenshot-dark.png" alt="The same page in the dark theme"></td>
+    <td><img src="docs/screenshot-terminal.png" alt="The same page in the green terminal theme"></td>
+  </tr>
+  <tr>
+    <td align="center">Dark</td>
+    <td align="center">Green terminal</td>
+  </tr>
+</table>
 
 > This is a hobby project. It catches a fair amount, but it is not a replacement for
 > Windows Defender, XProtect or ClamAV. Keep those on.
