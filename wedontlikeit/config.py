@@ -12,6 +12,7 @@ from . import platforms
 @dataclass
 class Config:
     lang: str = "en"
+    theme: str = "light"                   # light | dark | terminal
     heuristics: bool = True
     archives: bool = True
     auto_quarantine: bool = False          # quarantine high-severity detections

@@ -505,6 +505,47 @@ class TestConfig(Base):
         self.assertEqual(Config.load().lang, "en")
 
 
+class TestThemes(Base):
+    def setUp(self):
+        super().setUp()
+        try:
+            from wedontlikeit import gui
+        except Exception as exc:  # noqa: BLE001 - tkinter missing on this Python
+            self.skipTest(f"tkinter not available: {exc}")
+        if gui.tk is None:
+            self.skipTest("tkinter not available")
+        self.gui = gui
+
+    def tearDown(self):
+        if hasattr(self, "gui"):
+            self.gui.apply_theme("light")
+        super().tearDown()
+
+    def test_every_theme_defines_every_color(self):
+        keys = set(self.gui.THEMES["light"])
+        for name, theme in self.gui.THEMES.items():
+            self.assertEqual(set(theme), keys, name)
+            for k, v in theme.items():
+                if isinstance(v, str):
+                    self.assertRegex(v, r"^#[0-9A-Fa-f]{6}$", f"{name}.{k}")
+
+    def test_every_theme_has_a_name_in_every_language(self):
+        for code in i18n.LANGS:
+            for name in self.gui.THEMES:
+                self.assertIn(f"theme.{name}", i18n.raw(code), code)
+
+    def test_apply_theme(self):
+        self.gui.apply_theme("terminal")
+        self.assertEqual(self.gui.PAPER, self.gui.THEMES["terminal"]["PAPER"])
+        self.assertEqual(self.gui.SEV_FG["high"], self.gui.THEMES["terminal"]["RED"])
+        self.gui.apply_theme("nonsense")
+        self.assertEqual(self.gui.THEME, "light")
+
+    def test_saved_theme(self):
+        Config(theme="dark").save()
+        self.assertEqual(Config.load().theme, "dark")
+
+
 class TestPlatforms(unittest.TestCase):
     def test_folders(self):
         with mock.patch.dict(os.environ, {"WEDONTLIKEIT_HOME": "/x/y"}):

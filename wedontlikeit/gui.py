@@ -24,19 +24,37 @@ try:
 except ImportError:  # pragma: no cover - depends on how Python was installed
     tk = None
 
-# ------------------------------------------------------------------ palette
-PAPER = "#F2EFE7"
-CARD = "#FBFAF6"
-INK = "#1B1A17"
-INK_HOVER = "#3A3731"
-MUTED = "#6F6A60"
-FAINT = "#A7A296"
-RULE = "#DAD4C7"
-HOVER = "#E7E2D6"
-RED = "#B5321C"
-AMBER = "#94600E"
-GREEN = "#2F6A42"
-SEV_FG = {"high": RED, "medium": AMBER, "low": INK}
+# ------------------------------------------------------------------- themes
+# PAPER: window background · CARD: tables and inputs · INK: text · ACCENT: logo, labels,
+# selected page · RED/AMBER/GREEN: danger, warning, all good.
+THEMES = {
+    "light": dict(PAPER="#F2EFE7", CARD="#FBFAF6", INK="#1B1A17", INK_HOVER="#3A3731", MUTED="#6F6A60",
+                  FAINT="#A7A296", RULE="#DAD4C7", HOVER="#E7E2D6", ACCENT="#B5321C", RED="#B5321C",
+                  AMBER="#94600E", GREEN="#2F6A42", DARK=False, MONO=False),
+    "dark": dict(PAPER="#191816", CARD="#211F1C", INK="#ECE7DC", INK_HOVER="#D2CCBF", MUTED="#A29C90",
+                 FAINT="#6B665D", RULE="#36332E", HOVER="#2C2A26", ACCENT="#E0553B", RED="#E8634A",
+                 AMBER="#D9A043", GREEN="#78C58E", DARK=True, MONO=False),
+    "terminal": dict(PAPER="#050805", CARD="#0B110B", INK="#4CF07A", INK_HOVER="#8DFFAA", MUTED="#35B65C",
+                     FAINT="#23773D", RULE="#173A22", HOVER="#102216", ACCENT="#4CF07A", RED="#FF5F52",
+                     AMBER="#F2C14E", GREEN="#4CF07A", DARK=True, MONO=True),
+}
+THEME = "light"
+PAPER = CARD = INK = INK_HOVER = MUTED = FAINT = RULE = HOVER = ACCENT = RED = AMBER = GREEN = ""
+SEV_FG: dict[str, str] = {}
+
+
+def apply_theme(name: str) -> None:
+    """Swaps the module-level colors; the window is rebuilt afterwards."""
+    global THEME, PAPER, CARD, INK, INK_HOVER, MUTED, FAINT, RULE, HOVER, ACCENT, RED, AMBER, GREEN, SEV_FG
+    THEME = name if name in THEMES else "light"
+    th = THEMES[THEME]
+    PAPER, CARD, INK, INK_HOVER = th["PAPER"], th["CARD"], th["INK"], th["INK_HOVER"]
+    MUTED, FAINT, RULE, HOVER = th["MUTED"], th["FAINT"], th["RULE"], th["HOVER"]
+    ACCENT, RED, AMBER, GREEN = th["ACCENT"], th["RED"], th["AMBER"], th["GREEN"]
+    SEV_FG = {"high": RED, "medium": AMBER, "low": INK}
+
+
+apply_theme("light")
 
 # Chinese/Japanese/Korean fonts that come with Windows, macOS and common Linux distros
 CJK_FONTS = {
@@ -116,14 +134,16 @@ def _ago(iso: str) -> str:
 class FlatButton(tk.Label if tk else object):
     """A label that behaves like a button. tk.Button ignores colors on macOS, so this is used instead."""
 
-    STYLES = {
-        "primary": dict(bg=INK, fg=PAPER, hover=INK_HOVER, border=INK),
-        "secondary": dict(bg=CARD, fg=INK, hover=HOVER, border=RULE),
-        "danger": dict(bg=CARD, fg=RED, hover=HOVER, border=RULE),
-    }
+    @staticmethod
+    def styles():
+        return {
+            "primary": dict(bg=INK, fg=PAPER, hover=INK_HOVER, border=INK),
+            "secondary": dict(bg=CARD, fg=INK, hover=HOVER, border=RULE),
+            "danger": dict(bg=CARD, fg=RED, hover=HOVER, border=RULE),
+        }
 
     def __init__(self, parent, text, command, kind="secondary", font=None):
-        st = self.STYLES[kind]
+        st = self.styles()[kind]
         super().__init__(parent, text=text, bg=st["bg"], fg=st["fg"], font=font, padx=16, pady=7,
                          cursor="hand2", highlightthickness=1, highlightbackground=st["border"],
                          highlightcolor=st["border"])
@@ -144,7 +164,8 @@ class FlatButton(tk.Label if tk else object):
 
 
 class LinkButton(tk.Label if tk else object):
-    def __init__(self, parent, text, command, font, fg=MUTED, bg=PAPER):
+    def __init__(self, parent, text, command, font, fg=None, bg=None):
+        fg, bg = fg or MUTED, bg or PAPER
         super().__init__(parent, text=text, fg=fg, bg=bg, font=font, cursor="hand2")
         self._font = tkfont.Font(font=font)
         self._ufont = tkfont.Font(font=font)
@@ -157,7 +178,8 @@ class LinkButton(tk.Label if tk else object):
 class Check(tk.Frame if tk else object):
     """A checkbox drawn by hand so it looks the same on every system."""
 
-    def __init__(self, parent, text, value: bool, on_change, font, bg=PAPER, wrap=520):
+    def __init__(self, parent, text, value: bool, on_change, font, bg=None, wrap=520):
+        bg = bg or PAPER
         super().__init__(parent, bg=bg)
         self.value = value
         self.on_change = on_change
@@ -188,7 +210,8 @@ class Check(tk.Frame if tk else object):
 class Progress(tk.Canvas if tk else object):
     """A thin line with a sliding segment: we don't know the file count in advance."""
 
-    def __init__(self, parent, bg=PAPER):
+    def __init__(self, parent, bg=None):
+        bg = bg or PAPER
         super().__init__(parent, height=3, bg=bg, highlightthickness=0)
         self._running = False
         self._x = 0.0
@@ -249,6 +272,7 @@ class App:
                 pass
         self.cfg = Config.load()
         i18n.set_lang(i18n.resolve(None))
+        apply_theme(self.cfg.theme)
         if not self.cfg.watch_folders:
             self.cfg.watch_folders = [str(p) for p in platforms.watch_default_paths()]
 
@@ -257,6 +281,7 @@ class App:
         self.root.geometry("1060x720")
         self.root.minsize(900, 660)
         self.root.configure(bg=PAPER)
+        self._dark_title_bar()
         self._icon = make_icon()
         self.root.iconphoto(True, self._icon)
         self.root.protocol("WM_DELETE_WINDOW", self.close)
@@ -294,6 +319,8 @@ class App:
             serif = _pick(fam, cjk["serif"], sans)
         mono = _pick(fam, ["JetBrains Mono", "Cascadia Mono", "SF Mono", "Menlo", "Consolas",
                            "Noto Sans Mono", "DejaVu Sans Mono"], mono_base)
+        if THEMES[THEME]["MONO"]:  # the green terminal look: one monospace font for everything
+            sans = serif = mono
         self.f = {
             "body": (sans, 10),
             "body_b": (sans, 10, "bold"),
@@ -322,6 +349,21 @@ class App:
         s.configure("WD.Vertical.TScrollbar", background=RULE, troughcolor=CARD, bordercolor=CARD,
                     lightcolor=RULE, darkcolor=RULE, arrowcolor=MUTED, gripcount=0, arrowsize=11)
         s.map("WD.Vertical.TScrollbar", background=[("active", FAINT)])
+        # colors for Tk's own widgets (the file chooser on Linux, message boxes)
+        for opt, val in (("*Background", PAPER), ("*Foreground", INK), ("*activeBackground", HOVER),
+                         ("*activeForeground", INK), ("*selectBackground", HOVER), ("*selectForeground", INK),
+                         ("*insertBackground", INK), ("*highlightBackground", PAPER), ("*troughColor", CARD),
+                         ("*Entry.Background", CARD), ("*Listbox.Background", CARD)):
+            self.root.option_add(opt, val, "interactive")
+        s.configure("TButton", background=CARD, foreground=INK, bordercolor=RULE, lightcolor=CARD,
+                    darkcolor=CARD, focuscolor=RULE)
+        s.map("TButton", background=[("active", HOVER)])
+        for name in ("TEntry", "TCombobox"):
+            s.configure(name, fieldbackground=CARD, foreground=INK, bordercolor=RULE, lightcolor=CARD,
+                        darkcolor=CARD, insertcolor=INK, arrowcolor=INK, background=CARD)
+        s.configure("TScrollbar", background=RULE, troughcolor=CARD, bordercolor=CARD, arrowcolor=MUTED)
+        s.configure("TLabel", background=PAPER, foreground=INK)
+        s.configure("TFrame", background=PAPER)
 
     # ---------------------------------------------------------- layout
     def build(self):
@@ -336,8 +378,8 @@ class App:
         header.grid(row=0, column=0, columnspan=3, sticky="ew")
         header.grid_propagate(False)
         logo = tk.Canvas(header, width=22, height=22, bg=PAPER, highlightthickness=0)
-        logo.create_oval(2, 2, 20, 20, outline=RED, width=2.6)
-        logo.create_line(5.6, 5.6, 16.4, 16.4, fill=RED, width=2.6)
+        logo.create_oval(2, 2, 20, 20, outline=ACCENT, width=2.6)
+        logo.create_line(5.6, 5.6, 16.4, 16.4, fill=ACCENT, width=2.6)
         logo.place(x=24, rely=0.5, anchor="w")
         tk.Label(header, text="WeDontLikeIt", bg=PAPER, fg=INK, font=self.f["mark"]).place(x=54, rely=0.5, anchor="w")
         self.header_info = tk.Label(header, bg=PAPER, fg=MUTED, font=self.f["small"])
@@ -405,7 +447,7 @@ class App:
             on = k == key
             for w in (row, lbl, badge):
                 w.configure(bg=CARD if on else PAPER)
-            bar.configure(bg=RED if on else PAPER)
+            bar.configure(bg=ACCENT if on else PAPER)
             lbl.configure(fg=INK if on else MUTED, font=self.f["nav_on"] if on else self.f["nav"])
         for k, page in self.pages.items():
             if k == key:
@@ -419,7 +461,7 @@ class App:
     def _page(self, eyebrow_key):
         page = tk.Frame(self.content, bg=PAPER, padx=40, pady=30)
         page.grid_columnconfigure(0, weight=1)
-        tk.Label(page, text=t(eyebrow_key), bg=PAPER, fg=RED, font=self.f["eyebrow"], anchor="w").grid(
+        tk.Label(page, text=t(eyebrow_key), bg=PAPER, fg=ACCENT, font=self.f["eyebrow"], anchor="w").grid(
             row=0, column=0, sticky="w")
         return page
 
@@ -863,8 +905,7 @@ class App:
         page = self._page("settings.eyebrow")
         tk.Label(page, text=t("settings.h"), bg=PAPER, fg=INK, font=self.f["h1"], anchor="w").grid(
             row=1, column=0, sticky="w", pady=(6, 0))
-        body = tk.Frame(page, bg=PAPER)
-        body.grid(row=2, column=0, sticky="nw", pady=(26, 0))
+        body = self._scroll_area(page, row=2)
         body.grid_columnconfigure(1, weight=1)
         r = 0
 
@@ -912,16 +953,19 @@ class App:
         key.pack(side="left", padx=(10, 0), ipady=4)
         key.bind("<FocusOut>", lambda e: self._save_key())
 
-        s = section(t("set.language"))
-        picker = FlatButton(s, f"{i18n.LANGS[i18n.current()]}   \u25be", None, "secondary", self.f["body"])
-        picker.pack(anchor="w")
-        menu = tk.Menu(self.root, tearoff=0, bg=CARD, fg=INK, activebackground=HOVER, activeforeground=INK,
-                       relief="flat", bd=1, font=self.f["body"])
-        for code, name in i18n.LANGS.items():
-            mark = "\u2713  " if code == i18n.current() else "     "
-            menu.add_command(label=mark + name, command=lambda c=code: self.set_language(c))
-        picker._command = lambda: menu.tk_popup(picker.winfo_rootx(), picker.winfo_rooty() + picker.winfo_height())
-        self.lang_note = tk.Label(s, bg=PAPER, fg=MUTED, font=self.f["small"], wraplength=440, justify="left")
+        s = section(t("set.appearance"))
+        row = tk.Frame(s, bg=PAPER)
+        row.pack(anchor="w")
+        for col, (label, items, current, pick) in enumerate((
+                (t("set.theme"), [(t(f"theme.{k}"), k) for k in THEMES], THEME, self.set_theme),
+                (t("set.language"), [(name, code) for code, name in i18n.LANGS.items()], i18n.current(),
+                 self.set_language))):
+            cell = tk.Frame(row, bg=PAPER)
+            cell.grid(row=0, column=col, sticky="nw", padx=(0, 28))
+            tk.Label(cell, text=label, bg=PAPER, fg=MUTED, font=self.f["small"]).pack(anchor="w", pady=(0, 4))
+            self._dropdown(cell, items, current, pick)
+        self.theme_note = self.lang_note = tk.Label(s, bg=PAPER, fg=MUTED, font=self.f["small"],
+                                                    wraplength=440, justify="left")
         self.lang_note.pack(anchor="w", pady=(8, 0) if i18n.current() not in i18n.HUMAN_TRANSLATED else 0)
         if i18n.current() not in i18n.HUMAN_TRANSLATED:
             self.lang_note.configure(text=t("set.lang_note"))
@@ -962,6 +1006,96 @@ class App:
         d = platforms.data_dir()
         d.mkdir(parents=True, exist_ok=True)
         platforms.reveal(d)
+
+    def _scroll_area(self, page, row):
+        """A frame that scrolls vertically when its content doesn't fit."""
+        page.grid_rowconfigure(row, weight=1)
+        holder = tk.Frame(page, bg=PAPER)
+        holder.grid(row=row, column=0, sticky="nsew", pady=(26, 0))
+        holder.grid_columnconfigure(0, weight=1)
+        holder.grid_rowconfigure(0, weight=1)
+        canvas = tk.Canvas(holder, bg=PAPER, highlightthickness=0, bd=0)
+        canvas.grid(row=0, column=0, sticky="nsew")
+        bar = ttk.Scrollbar(holder, orient="vertical", command=canvas.yview, style="WD.Vertical.TScrollbar")
+        canvas.configure(yscrollcommand=bar.set)
+        inner = tk.Frame(canvas, bg=PAPER)
+        win = canvas.create_window(0, 0, window=inner, anchor="nw")
+
+        def refresh(_e=None):
+            canvas.configure(scrollregion=(0, 0, inner.winfo_reqwidth(), inner.winfo_reqheight()))
+            canvas.itemconfigure(win, width=canvas.winfo_width())
+            if inner.winfo_reqheight() > canvas.winfo_height() + 1:
+                bar.grid(row=0, column=1, sticky="ns")
+            else:
+                bar.grid_remove()
+                canvas.yview_moveto(0)
+
+        inner.bind("<Configure>", refresh)
+        canvas.bind("<Configure>", refresh)
+
+        def wheel(e):
+            if not bar.winfo_ismapped():
+                return
+            if e.num == 4 or e.delta > 0:
+                canvas.yview_scroll(-3 if e.num in (4, 5) else -max(1, abs(e.delta) // 40), "units")
+            else:
+                canvas.yview_scroll(3 if e.num in (4, 5) else max(1, abs(e.delta) // 40), "units")
+
+        def bind_wheel(_e):
+            canvas.bind_all("<MouseWheel>", wheel)   # Windows, macOS
+            canvas.bind_all("<Button-4>", wheel)     # Linux
+            canvas.bind_all("<Button-5>", wheel)
+
+        def unbind_wheel(_e):
+            for seq in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+                canvas.unbind_all(seq)
+
+        holder.bind("<Enter>", bind_wheel)
+        holder.bind("<Leave>", unbind_wheel)
+        return inner
+
+    def _dropdown(self, parent, items, current, on_pick):
+        """A button that opens a menu. items: [(label, value)]."""
+        label = next((lb for lb, v in items if v == current), items[0][0])
+        button = FlatButton(parent, f"{label}   \u25be", None, "secondary", self.f["body"])
+        button.pack(anchor="w")
+        menu = tk.Menu(self.root, tearoff=0, bg=CARD, fg=INK, activebackground=HOVER, activeforeground=INK,
+                       relief="flat", bd=1, font=self.f["body"])
+        for lb, value in items:
+            mark = "\u2713  " if value == current else "     "
+            menu.add_command(label=mark + lb, command=lambda v=value: on_pick(v))
+        button._command = lambda: menu.tk_popup(button.winfo_rootx(), button.winfo_rooty() + button.winfo_height())
+        return button
+
+    def set_theme(self, name):
+        if name == THEME:
+            return
+        if self.scan_state == "running":
+            self.theme_note.configure(text=t("set.busy"), fg=RED)
+            return
+        self.cfg.theme = name
+        self.cfg.save()
+        apply_theme(name)
+        self.root.configure(bg=PAPER)
+        self._dark_title_bar()
+        self._fonts()
+        self._style()
+        self.build()
+
+    def _dark_title_bar(self):
+        """Windows 10/11 draw the title bar themselves; ask for a dark one in the dark themes."""
+        if sys.platform != "win32":
+            return
+        try:
+            import ctypes
+            self.root.update_idletasks()
+            hwnd = ctypes.windll.user32.GetParent(self.root.winfo_id())
+            value = ctypes.c_int(1 if THEMES[THEME]["DARK"] else 0)
+            for attr in (20, 19):  # DWMWA_USE_IMMERSIVE_DARK_MODE (newer, then older builds)
+                if ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, attr, ctypes.byref(value), 4) == 0:
+                    break
+        except Exception:  # noqa: BLE001
+            pass
 
     def set_language(self, code):
         if code == i18n.current():

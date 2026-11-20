@@ -60,7 +60,8 @@ Four pages, nothing hidden:
   quarantined, trusted (if it's a false positive) or opened in your file manager.
 - **Protection**: watches folders (Downloads and Desktop by default) and checks new files as soon as they land.
 - **Quarantine**: everything that was locked away, with restore and delete.
-- **Settings**: heuristics, archives, automatic quarantine, signature updates and language.
+- **Settings**: heuristics, archives, automatic quarantine, signature updates, language and theme
+  (light, dark, or a green-on-black terminal look).
 
 ## The command line
 
