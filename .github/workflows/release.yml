@@ -1,5 +1,5 @@
 # Builds the desktop app and the command-line tool for Windows, macOS and Linux.
-# Run it by hand from the Actions tab, or push a tag: git tag v0.4.0 && git push --tags
+# Run it by hand from the Actions tab, or push a tag: git tag v0.4.1 && git push --tags
 name: release
 
 on:
