@@ -1,21 +1,48 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "wedontlikeit"
-version = "0.5.0"
-description = "A small antivirus for Windows, macOS and Linux"
+version = "0.5.1"
+description = "A small antivirus for Linux, Windows and macOS, written in plain Python. Desktop app and CLI."
 readme = "README.md"
 license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "PRME_idiot" }]
 requires-python = ">=3.10"
+keywords = ["antivirus", "malware", "security", "scanner", "yara", "quarantine"]
 classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Environment :: X11 Applications",
+    "Intended Audience :: End Users/Desktop",
+    "Natural Language :: English",
+    "Natural Language :: Portuguese (Brazilian)",
+    "Natural Language :: Spanish",
+    "Natural Language :: French",
+    "Natural Language :: German",
+    "Natural Language :: Italian",
+    "Natural Language :: Dutch",
+    "Natural Language :: Polish",
+    "Natural Language :: Russian",
+    "Natural Language :: Turkish",
+    "Natural Language :: Japanese",
+    "Natural Language :: Korean",
+    "Natural Language :: Chinese (Simplified)",
+    "Operating System :: POSIX :: Linux",
     "Operating System :: Microsoft :: Windows",
     "Operating System :: MacOS",
-    "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
     "Topic :: Security",
+    "Topic :: System :: Monitoring",
 ]
+
+[project.urls]
+Homepage = "https://github.com/PRMEidiot/WeDontLikeIt"
+Issues = "https://github.com/PRMEidiot/WeDontLikeIt/issues"
+Releases = "https://github.com/PRMEidiot/WeDontLikeIt/releases"
 
 [project.optional-dependencies]
 yara = ["yara-python>=4.3"]
@@ -27,7 +54,8 @@ wedontlikeit = "wedontlikeit.cli:main"
 wedontlikeit-gui = "wedontlikeit.gui:main"
 
 [tool.setuptools]
-packages = ["wedontlikeit"]
+packages = ["wedontlikeit", "wedontlikeit.data", "wedontlikeit.locales"]
 
 [tool.setuptools.package-data]
-wedontlikeit = ["data/*", "locales/*.json"]
+"wedontlikeit.data" = ["*.hashes", "*.patterns"]
+"wedontlikeit.locales" = ["*.json"]

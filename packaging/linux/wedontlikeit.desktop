@@ -1,0 +1,19 @@
+[Desktop Entry]
+Type=Application
+Name=WeDontLikeIt
+GenericName=Antivirus
+GenericName[pt_BR]=Antivírus
+GenericName[es]=Antivirus
+GenericName[fr]=Antivirus
+GenericName[de]=Virenscanner
+Comment=Scan files and folders for malware
+Comment[pt_BR]=Verifica arquivos e pastas em busca de malware
+Comment[es]=Analiza archivos y carpetas en busca de malware
+Comment[fr]=Analyse les fichiers et dossiers à la recherche de malwares
+Comment[de]=Dateien und Ordner auf Schadsoftware prüfen
+Exec=wedontlikeit-gui
+Icon=wedontlikeit
+Terminal=false
+Categories=System;Security;
+Keywords=malware;virus;scan;security;quarantine;
+StartupWMClass=WeDontLikeIt

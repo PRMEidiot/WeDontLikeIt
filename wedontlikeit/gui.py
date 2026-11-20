@@ -311,7 +311,7 @@ class App:
         if not self.cfg.watch_folders:
             self.cfg.watch_folders = [str(p) for p in platforms.watch_default_paths()]
 
-        self.root = tk.Tk()
+        self.root = tk.Tk(className="WeDontLikeIt")  # WM_CLASS, matches StartupWMClass in the .desktop file
         self.root.title("WeDontLikeIt")
         self.root.geometry("1060x720")
         self.root.minsize(900, 660)

@@ -1,0 +1,33 @@
+# Maintainer: PRME_idiot <233863176+PRMEidiot@users.noreply.github.com>
+
+pkgname=wedontlikeit
+pkgver=0.5.1
+pkgrel=1
+pkgdesc="A small antivirus written in plain Python, with a desktop app and a command-line tool"
+arch=('any')
+url="https://github.com/PRMEidiot/WeDontLikeIt"
+license=('MIT')
+depends=('python' 'tk')
+makedepends=('python-build' 'python-installer' 'python-wheel' 'python-setuptools')
+optdepends=('python-yara: YARA rule support')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+  cd "WeDontLikeIt-$pkgver"
+  python -m build --wheel --no-isolation
+}
+
+check() {
+  cd "WeDontLikeIt-$pkgver"
+  python -m unittest
+}
+
+package() {
+  cd "WeDontLikeIt-$pkgver"
+  python -m installer --destdir="$pkgdir" dist/*.whl
+  install -Dm644 packaging/linux/wedontlikeit.desktop "$pkgdir/usr/share/applications/wedontlikeit.desktop"
+  install -Dm644 packaging/linux/wedontlikeit.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/wedontlikeit.svg"
+  install -Dm644 packaging/linux/wedontlikeit.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/wedontlikeit.png"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- WeDontLikeIt: a red "no" sign -->
+  <circle cx="32" cy="32" r="26.2" fill="none" stroke="#B5321C" stroke-width="7.7"/>
+  <line x1="14.8" y1="14.8" x2="49.2" y2="49.2" stroke="#B5321C" stroke-width="8.3"/>
+</svg>

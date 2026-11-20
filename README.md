@@ -8,20 +8,20 @@ It comes as a desktop app and as a command-line tool. Both use the same engine.
 It's open source under the MIT License. You're free to build on it, as long as you give credit
 ([details](#open-source-and-giving-credit)).
 
-![The scan page after finding a few things, in the light theme](docs/screenshot-light.png)
+![The scan page after finding a few things, in the light theme](https://raw.githubusercontent.com/PRMEidiot/WeDontLikeIt/main/docs/screenshot-light.png)
 
 <table>
   <tr>
-    <td><img src="docs/screenshot-dark.png" alt="The same page in the dark theme"></td>
-    <td><img src="docs/screenshot-terminal.png" alt="The same page in the green terminal theme"></td>
+    <td><img src="https://raw.githubusercontent.com/PRMEidiot/WeDontLikeIt/main/docs/screenshot-dark.png" alt="The same page in the dark theme"></td>
+    <td><img src="https://raw.githubusercontent.com/PRMEidiot/WeDontLikeIt/main/docs/screenshot-terminal.png" alt="The same page in the green terminal theme"></td>
   </tr>
   <tr>
     <td align="center">Dark</td>
     <td align="center">Green terminal</td>
   </tr>
   <tr>
-    <td><img src="docs/screenshot-amber.png" alt="The same page in the amber terminal theme"></td>
-    <td><img src="docs/screenshot-contrast.png" alt="The same page in the high contrast theme"></td>
+    <td><img src="https://raw.githubusercontent.com/PRMEidiot/WeDontLikeIt/main/docs/screenshot-amber.png" alt="The same page in the amber terminal theme"></td>
+    <td><img src="https://raw.githubusercontent.com/PRMEidiot/WeDontLikeIt/main/docs/screenshot-contrast.png" alt="The same page in the high contrast theme"></td>
   </tr>
   <tr>
     <td align="center">Amber terminal</td>
@@ -40,11 +40,11 @@ features land there first, and Linux bugs get fixed first.
 Windows and macOS are supported too, not an afterthought: the same code runs on all three, the test
 suite runs on every one of them for every change, and each release ships builds for them. If something
 works on Linux but breaks on Windows or macOS, that's a bug, so please
-[open an issue](../../issues).
+[open an issue](https://github.com/PRMEidiot/WeDontLikeIt/issues).
 
 ## Getting it
 
-Grab a build for your system from [Releases](../../releases). You don't need Python installed.
+Grab a build for your system from [Releases](https://github.com/PRMEidiot/WeDontLikeIt/releases). You don't need Python installed.
 
 - **Linux**: `WeDontLikeIt-linux` (app) or `wedontlikeit-cli-linux`
 - **Windows**: `WeDontLikeIt-windows.exe` (app) or `wedontlikeit-cli-windows.exe`
@@ -76,7 +76,7 @@ The app needs tkinter. It ships with Python on Windows and macOS. On Linux you m
 The first time you open it, a short setup asks for your language (it starts in your system's
 language), a theme and a few preferences.
 
-![The theme step of the first-run setup, with all six themes](docs/screenshot-setup.png)
+![The theme step of the first-run setup, with all six themes](https://raw.githubusercontent.com/PRMEidiot/WeDontLikeIt/main/docs/screenshot-setup.png)
 
 After that, four pages, nothing hidden:
 
@@ -119,7 +119,7 @@ Polski, Русский, Türkçe, 日本語, 한국어 and 简体中文. Pick on
 
 English and Portuguese were written by hand. The rest were machine translated, so some phrasing
 will be off. Fixes are very welcome: each language is a plain JSON file in
-[`wedontlikeit/locales/`](wedontlikeit/locales/). Copy `en.json` to start a new one; the tests check
+[`wedontlikeit/locales/`](https://github.com/PRMEidiot/WeDontLikeIt/tree/main/wedontlikeit/locales). Copy `en.json` to start a new one; the tests check
 that every key, placeholder and plural form is there.
 
 ## What it looks for
@@ -185,7 +185,7 @@ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 Example.Empty
 Example.Pattern 6d616c77617265
 ```
 
-There are example YARA rules in [`rules/`](rules/). Put `severity = "medium"` (or `"low"`) in a rule's
+There are example YARA rules in [`rules/`](https://github.com/PRMEidiot/WeDontLikeIt/tree/main/rules). Put `severity = "medium"` (or `"low"`) in a rule's
 meta to change its severity.
 
 ## Hacking on it
@@ -213,7 +213,7 @@ wedontlikeit/
   config.py      saved settings
 ```
 
-GitHub Actions runs the tests on Windows, macOS and Linux on every push. Pushing a tag like `v0.5.0`
+GitHub Actions runs the tests on Windows, macOS and Linux on every push. Pushing a tag like `v0.5.1`
 builds the apps and attaches them to a release.
 
 One rule worth knowing: the test suite scans the project itself and fails if anything is flagged.
@@ -225,12 +225,12 @@ instead of polling, `.rar`/`.7z`/`.tar.gz` support, importing ClamAV signatures.
 
 ## Open source, and giving credit
 
-WeDontLikeIt is open source under the [MIT License](LICENSE). You can use it, change it, ship it
+WeDontLikeIt is open source under the [MIT License](https://github.com/PRMEidiot/WeDontLikeIt/blob/main/LICENSE). You can use it, change it, ship it
 inside your own project and even sell that project. You don't need to ask.
 
 There is one condition, and it isn't optional: **if you use this code, or a substantial part of it,
 as the base of your own project, you have to give credit.** In practice that means keeping the
-copyright notice and the MIT license text from [`LICENSE`](LICENSE) in your copy of the code.
+copyright notice and the MIT license text from [`LICENSE`](https://github.com/PRMEidiot/WeDontLikeIt/blob/main/LICENSE) in your copy of the code.
 If you ship a compiled program, include them alongside it too, for example in your docs or a
 "licenses" screen. That's what the MIT License requires: without the notice, you don't have
 permission to use the code.
