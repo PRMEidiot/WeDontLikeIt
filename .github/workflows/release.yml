@@ -30,12 +30,11 @@ jobs:
         shell: bash
         run: |
           pip install . pyinstaller==6.11.1
-          # Separate folders and names: Windows and macOS file names ignore case, so
-          # "wedontlikeit" and "WeDontLikeIt" would overwrite each other.
-          pyinstaller --onefile --name wedontlikeit-cli --collect-data wedontlikeit \
-            --distpath build-cli/dist --workpath build-cli/work --specpath build-cli run.py
-          pyinstaller --onefile --windowed --name WeDontLikeIt --collect-data wedontlikeit \
-            --distpath build-gui/dist --workpath build-gui/work --specpath build-gui run_gui.py
+          # packaging/wedontlikeit.spec builds both (and keeps system font libraries out on Linux).
+          # Separate folders: Windows and macOS file names ignore case, so "wedontlikeit" and
+          # "WeDontLikeIt" would overwrite each other.
+          WDLI_TARGET=cli pyinstaller --noconfirm --distpath build-cli/dist --workpath build-cli/work packaging/wedontlikeit.spec
+          WDLI_TARGET=gui pyinstaller --noconfirm --distpath build-gui/dist --workpath build-gui/work packaging/wedontlikeit.spec
           mkdir out
           mv "build-cli/dist/wedontlikeit-cli${{ matrix.exe }}" "out/wedontlikeit-cli-${{ matrix.name }}${{ matrix.exe }}"
           if [ "$RUNNER_OS" = "macOS" ]; then
@@ -44,6 +43,13 @@ jobs:
             mv "build-gui/dist/WeDontLikeIt${{ matrix.exe }}" "out/WeDontLikeIt-${{ matrix.name }}${{ matrix.exe }}"
           fi
           ls -la out
+      - name: No bundled font libraries on Linux
+        if: runner.os == 'Linux'
+        run: |
+          for f in out/wedontlikeit-cli-linux out/WeDontLikeIt-linux; do
+            pyi-archive_viewer --list "$f" > contents.txt
+            if grep -E "libfontconfig|libfreetype" contents.txt; then echo "$f bundles font libraries"; exit 1; fi
+          done
       - name: Smoke test (must flag EICAR)
         shell: bash
         run: |

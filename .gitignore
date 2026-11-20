@@ -11,3 +11,5 @@ venv/
 build-cli/
 build-gui/
 out/
+build/
+!packaging/wedontlikeit.spec
