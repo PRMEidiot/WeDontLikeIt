@@ -44,6 +44,10 @@ PACKER_SECTIONS = {
 }
 INJECTION_APIS = (b"VirtualAllocEx", b"WriteProcessMemory", b"CreateRemoteThread",
                   b"NtUnmapViewOfSection", b"QueueUserAPC", b"SetThreadContext")
+# Opening the physical disk directly, as in CreateFile("\\\\.\\PhysicalDrive0"), in ASCII and UTF-16.
+RAW_DISK = (b"\\\\.\\physicaldrive", "\\\\.\\physicaldrive".encode("utf-16-le"))
+# Ways to take the machine down right after writing: a forced blue screen or a shutdown.
+CRASH_APIS = (b"ntraiseharderror", b"exitwindowsex", b"initiatesystemshutdown", b"ntshutdownsystem")
 HOOK_APIS = (b"SetWindowsHookExA", b"SetWindowsHookExW")
 KEY_APIS = (b"GetAsyncKeyState", b"GetKeyboardState")
 
@@ -139,7 +143,22 @@ def analyze_pe(data: bytes) -> list[Finding]:
         out.append(Finding("Heuristic.PE.ProcessInjection", "medium"))
     if any(a in data for a in HOOK_APIS) and any(a in data for a in KEY_APIS):
         out.append(Finding("Heuristic.PE.Keylogger", "low"))
+    out += _raw_disk_findings(data)
     return out
+
+
+def _raw_disk_findings(data: bytes) -> list[Finding]:
+    """Writing straight to the physical disk (the boot sector lives there), then crashing the machine,
+    is what MBR wipers do (MEMZ, NotPetya...). Disk tools like Rufus also write to the raw disk,
+    so that alone is only low."""
+    if b"WriteFile" not in data:
+        return []
+    low = data.lower()
+    if not any(marker in low for marker in RAW_DISK):
+        return []
+    if any(api in low for api in CRASH_APIS):
+        return [Finding("Heuristic.PE.DiskWiper", "medium")]
+    return [Finding("Heuristic.PE.RawDiskWrite", "low")]
 
 
 def _elf_exec_sections(data: bytes):

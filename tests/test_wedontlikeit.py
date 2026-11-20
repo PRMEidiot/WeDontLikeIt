@@ -158,6 +158,39 @@ class TestFileHeuristics(Base):
         pe = make_pe([(b".text", EXEC | READ, b"\x90" * 512)], extra=apis)
         self.assertIn("Heuristic.PE.ProcessInjection", self.names(self.write("i.exe", pe)))
 
+    def pe_with(self, *strings):
+        return make_pe([(b".text", EXEC | READ, b"\x90" * 512)], extra=b"\0".join(strings))
+
+    def test_mbr_wiper_like_memz(self):
+        # what MEMZ does: open \\.\PhysicalDrive0, write a new boot sector, then force a blue screen
+        pe = self.pe_with(b"CreateFileA", b"WriteFile", b"\\\\.\\PhysicalDrive0", b"RtlAdjustPrivilege",
+                          b"NtRaiseHardError")
+        names = self.names(self.write("memz-like.exe", pe))
+        self.assertIn("Heuristic.PE.DiskWiper", names)
+        self.assertNotIn("Heuristic.PE.RawDiskWrite", names)
+
+    def test_wiper_with_wide_string_and_shutdown(self):
+        pe = self.pe_with(b"WriteFile", "\\\\.\\PHYSICALDRIVE1".encode("utf-16-le"), b"ExitWindowsEx")
+        self.assertIn("Heuristic.PE.DiskWiper", self.names(self.write("w.exe", pe)))
+
+    def test_disk_tool_is_only_low(self):
+        # a USB image writer (Rufus, Etcher...) writes to the raw disk but doesn't crash the machine
+        pe = self.pe_with(b"CreateFileW", b"WriteFile", b"DeviceIoControl", b"\\\\.\\PhysicalDrive2")
+        dets = self.engine.scan_path(self.write("usbwriter.exe", pe))
+        self.assertEqual([(d.name, d.severity) for d in dets], [("Heuristic.PE.RawDiskWrite", "low")])
+
+    def test_raw_disk_without_writing_is_fine(self):
+        pe = self.pe_with(b"CreateFileW", b"ReadFile", b"\\\\.\\PhysicalDrive0", b"ExitWindowsEx")
+        self.assertEqual(self.names(self.write("diskinfo.exe", pe)), set())
+
+    def test_writing_files_and_shutting_down_is_fine(self):
+        pe = self.pe_with(b"CreateFileW", b"WriteFile", b"C:\\Users\\Public\\log.txt", b"ExitWindowsEx")
+        self.assertEqual(self.names(self.write("updater.exe", pe)), set())
+
+    def test_physicaldrive_text_in_a_document_is_fine(self):
+        txt = b"To image a disk, open \\\\.\\PhysicalDrive0 with CreateFile and call WriteFile, then ExitWindowsEx."
+        self.assertEqual(self.names(self.write("notes.txt", txt)), set())
+
     def test_elf_without_sections_and_high_entropy(self):
         elf = b"\x7fELF\x02\x01\x01" + b"\0" * 57 + os.urandom(64 * 1024)  # e_shnum = 0
         self.assertIn("Heuristic.ELF.Packed", self.names(self.write("bin", elf)))

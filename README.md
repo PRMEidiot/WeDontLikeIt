@@ -128,7 +128,9 @@ that every key, placeholder and plural form is there.
 [MalwareBazaar](https://bazaar.abuse.ch/). Optional YARA rules on top.
 
 **Suspicious executables.** For Windows PE files: packers (UPX, Themida, VMProtect, ASPack and others),
-encrypted code sections, writable-and-executable sections, process injection and keylogging APIs.
+encrypted code sections, writable-and-executable sections, process injection and keylogging APIs,
+and disk wipers: programs that write straight to the physical disk (where the boot sector lives) and
+then force a blue screen or a shutdown, the way MEMZ and NotPetya do.
 For Linux ELF and macOS Mach-O: UPX and packed or encrypted code.
 
 **Scripts and one-liners.** Reverse shells, piping a download straight into a shell, PowerShell download
