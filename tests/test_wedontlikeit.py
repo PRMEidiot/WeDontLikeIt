@@ -549,8 +549,42 @@ class TestThemes(Base):
 
     def test_every_theme_has_a_name_in_every_language(self):
         for code in i18n.LANGS:
-            for name in self.gui.THEMES:
+            for name in self.gui.THEME_CHOICES:
                 self.assertIn(f"theme.{name}", i18n.raw(code), code)
+
+    @staticmethod
+    def contrast(a, b):
+        def lum(hexcolor):
+            rgb = [int(hexcolor[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+            lin = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in rgb]
+            return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+        hi, lo = sorted((lum(a), lum(b)), reverse=True)
+        return (hi + 0.05) / (lo + 0.05)
+
+    def test_text_is_readable_in_every_theme(self):
+        """WCAG: 4.5:1 for text (7:1 in high contrast); findings must stand out on tables."""
+        for name, th in self.gui.THEMES.items():
+            with self.subTest(name):
+                need = 7 if name == "contrast" else 4.5
+                self.assertGreaterEqual(self.contrast(th["INK"], th["PAPER"]), need)
+                self.assertGreaterEqual(self.contrast(th["INK"], th["CARD"]), need)
+                self.assertGreaterEqual(self.contrast(th["MUTED"], th["PAPER"]), 4.5)
+                for sev in ("RED", "AMBER"):
+                    self.assertGreaterEqual(self.contrast(th[sev], th["CARD"]), 4.5, sev)
+                # "medium" must look different from normal text, or it disappears
+                self.assertNotEqual(th["AMBER"], th["INK"])
+
+    def test_auto_follows_the_system(self):
+        p = self.gui.platforms
+        with mock.patch.object(p, "system_high_contrast", return_value=False), \
+                mock.patch.object(p, "system_dark_mode", return_value=True):
+            self.gui.apply_theme("auto")
+            self.assertEqual((self.gui.CHOICE, self.gui.THEME), ("auto", "dark"))
+        with mock.patch.object(p, "system_high_contrast", return_value=False), \
+                mock.patch.object(p, "system_dark_mode", return_value=None):
+            self.assertEqual(self.gui.resolve_theme("auto"), "light")
+        with mock.patch.object(p, "system_high_contrast", return_value=True):
+            self.assertEqual(self.gui.resolve_theme("auto"), "contrast")
 
     def test_apply_theme(self):
         self.gui.apply_theme("terminal")

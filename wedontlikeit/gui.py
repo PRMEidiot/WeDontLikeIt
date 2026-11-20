@@ -30,24 +30,49 @@ except ImportError:  # pragma: no cover - depends on how Python was installed
 THEMES = {
     "light": dict(PAPER="#F2EFE7", CARD="#FBFAF6", INK="#1B1A17", INK_HOVER="#3A3731", MUTED="#6F6A60",
                   FAINT="#A7A296", RULE="#DAD4C7", HOVER="#E7E2D6", ACCENT="#B5321C", RED="#B5321C",
-                  AMBER="#94600E", GREEN="#2F6A42", DARK=False, MONO=False),
+                  AMBER="#94600E", GREEN="#2F6A42", DARK=False, MONO=False, BORDER=1, SIZE=0),
     "dark": dict(PAPER="#191816", CARD="#211F1C", INK="#ECE7DC", INK_HOVER="#D2CCBF", MUTED="#A29C90",
                  FAINT="#6B665D", RULE="#36332E", HOVER="#2C2A26", ACCENT="#E0553B", RED="#E8634A",
-                 AMBER="#D9A043", GREEN="#78C58E", DARK=True, MONO=False),
+                 AMBER="#D9A043", GREEN="#78C58E", DARK=True, MONO=False, BORDER=1, SIZE=0),
     "terminal": dict(PAPER="#050805", CARD="#0B110B", INK="#4CF07A", INK_HOVER="#8DFFAA", MUTED="#35B65C",
                      FAINT="#23773D", RULE="#173A22", HOVER="#102216", ACCENT="#4CF07A", RED="#FF5F52",
-                     AMBER="#F2C14E", GREEN="#4CF07A", DARK=True, MONO=True),
+                     AMBER="#F2C14E", GREEN="#4CF07A", DARK=True, MONO=True, BORDER=1, SIZE=0),
+    # amber phosphor; "medium" is light blue so it doesn't vanish into the amber text
+    "amber": dict(PAPER="#0A0703", CARD="#120D06", INK="#FFB23E", INK_HOVER="#FFD08A", MUTED="#C98A2E",
+                  FAINT="#7E561C", RULE="#3A2A12", HOVER="#21170A", ACCENT="#FFB23E", RED="#FF5F52",
+                  AMBER="#8FD3FF", GREEN="#FFB23E", DARK=True, MONO=True, BORDER=1, SIZE=0),
+    # for low vision: pure black and white, yellow accent, thicker borders, slightly bigger text
+    "contrast": dict(PAPER="#000000", CARD="#000000", INK="#FFFFFF", INK_HOVER="#FFFF00", MUTED="#E6E6E6",
+                     FAINT="#8A8A8A", RULE="#FFFFFF", HOVER="#1F3F7A", ACCENT="#FFFF00", RED="#FF7A7A",
+                     AMBER="#FFB347", GREEN="#7CFF9B", DARK=True, MONO=False, BORDER=2, SIZE=1),
 }
-THEME = "light"
+# what people can pick; "auto" follows the operating system
+THEME_CHOICES = ("light", "dark", "auto", "terminal", "amber", "contrast")
+
+
+def resolve_theme(choice: str) -> str:
+    if choice != "auto":
+        return choice if choice in THEMES else "light"
+    if platforms.system_high_contrast():
+        return "contrast"
+    return "dark" if platforms.system_dark_mode() else "light"
+
+
+THEME = "light"     # the colors in use
+CHOICE = "light"    # what the user picked (may be "auto")
+BORDER = 1
 PAPER = CARD = INK = INK_HOVER = MUTED = FAINT = RULE = HOVER = ACCENT = RED = AMBER = GREEN = ""
 SEV_FG: dict[str, str] = {}
 
 
 def apply_theme(name: str) -> None:
     """Swaps the module-level colors; the window is rebuilt afterwards."""
-    global THEME, PAPER, CARD, INK, INK_HOVER, MUTED, FAINT, RULE, HOVER, ACCENT, RED, AMBER, GREEN, SEV_FG
-    THEME = name if name in THEMES else "light"
+    global THEME, CHOICE, BORDER, PAPER, CARD, INK, INK_HOVER, MUTED, FAINT, RULE, HOVER, ACCENT, RED, AMBER
+    global GREEN, SEV_FG
+    CHOICE = name if name in THEME_CHOICES else "light"
+    THEME = resolve_theme(CHOICE)
     th = THEMES[THEME]
+    BORDER = th["BORDER"]
     PAPER, CARD, INK, INK_HOVER = th["PAPER"], th["CARD"], th["INK"], th["INK_HOVER"]
     MUTED, FAINT, RULE, HOVER = th["MUTED"], th["FAINT"], th["RULE"], th["HOVER"]
     ACCENT, RED, AMBER, GREEN = th["ACCENT"], th["RED"], th["AMBER"], th["GREEN"]
@@ -69,6 +94,7 @@ CJK_FONTS = {
 }
 
 POLL_MS = 80
+SYSTEM_THEME_CHECK_MS = 30_000
 WATCH_INTERVAL = 2.0
 
 
@@ -145,7 +171,7 @@ class FlatButton(tk.Label if tk else object):
     def __init__(self, parent, text, command, kind="secondary", font=None):
         st = self.styles()[kind]
         super().__init__(parent, text=text, bg=st["bg"], fg=st["fg"], font=font, padx=16, pady=7,
-                         cursor="hand2", highlightthickness=1, highlightbackground=st["border"],
+                         cursor="hand2", highlightthickness=BORDER, highlightbackground=st["border"],
                          highlightcolor=st["border"])
         self._st = st
         self._command = command
@@ -161,6 +187,9 @@ class FlatButton(tk.Label if tk else object):
     def set_enabled(self, enabled: bool) -> None:
         self._enabled = enabled
         self.configure(fg=self._st["fg"] if enabled else FAINT, cursor="hand2" if enabled else "arrow")
+        if BORDER > 1:  # high contrast: a dimmed border too, so "off" never looks like "on"
+            border = self._st["border"] if enabled else FAINT
+            self.configure(highlightbackground=border, highlightcolor=border)
 
 
 class LinkButton(tk.Label if tk else object):
@@ -314,6 +343,7 @@ class App:
             self.setup_opts = {"watch": True, "quick": True}
             self.show_setup()
         self.root.after(POLL_MS, self._drain)
+        self.root.after(SYSTEM_THEME_CHECK_MS, self._follow_system_theme)
 
     # ----------------------------------------------------------- look
     def _fonts(self):
@@ -332,18 +362,19 @@ class App:
                            "Noto Sans Mono", "DejaVu Sans Mono"], mono_base)
         if THEMES[THEME]["MONO"]:  # the green terminal look: one monospace font for everything
             sans = serif = mono
+        z = THEMES[THEME]["SIZE"]
         self.f = {
-            "body": (sans, 10),
-            "body_b": (sans, 10, "bold"),
-            "small": (sans, 9),
-            "eyebrow": (sans, 8, "bold"),
-            "nav": (sans, 11),
-            "nav_on": (sans, 11, "bold"),
+            "body": (sans, 10 + z),
+            "body_b": (sans, 10 + z, "bold"),
+            "small": (sans, 9 + z),
+            "eyebrow": (sans, 8 + z, "bold"),
+            "nav": (sans, 11 + z),
+            "nav_on": (sans, 11 + z, "bold"),
             "mark": (serif, 15, "bold"),
             "h1": (serif, 28),
-            "h2": (serif, 15),
-            "mono": (mono, 9),
-            "mono_s": (mono, 8),
+            "h2": (serif, 15 + z),
+            "mono": (mono, 9 + z),
+            "mono_s": (mono, 8 + z),
         }
         self.mono_char = tkfont.Font(font=self.f["mono"]).measure("0") or 7
         self.families = {"sans": sans, "serif": serif, "mono": mono}
@@ -440,24 +471,41 @@ class App:
     def _setup_theme(self, body):
         self._setup_heading(body, "setup.theme_h", "setup.theme_s")
         row = tk.Frame(body, bg=PAPER)
-        row.pack(anchor="w", pady=(32, 0))
-        for col, name in enumerate(THEMES):
-            selected = name == THEME
+        row.pack(anchor="w", pady=(24, 0))
+        for i, name in enumerate(THEME_CHOICES):
+            selected = name == CHOICE
             card = tk.Frame(row, bg=PAPER, highlightthickness=2, cursor="hand2",
                             highlightbackground=ACCENT if selected else RULE, highlightcolor=ACCENT)
-            card.grid(row=0, column=col, padx=(0, 20), sticky="n")
-            preview = self._theme_preview(card, THEMES[name])
+            card.grid(row=i // 3, column=i % 3, padx=(0, 18), pady=(0, 14), sticky="n")
+            if name == "auto":
+                preview = self._theme_preview(card, THEMES["light"], THEMES["dark"])
+            else:
+                preview = self._theme_preview(card, THEMES[name])
             preview.pack()
             label = tk.Label(card, text=("\u2713  " if selected else "") + t(f"theme.{name}"), bg=PAPER,
-                             fg=INK, font=self.f["body_b"] if selected else self.f["body"], pady=10, cursor="hand2")
+                             fg=INK, font=self.f["body_b"] if selected else self.f["body"], pady=6, cursor="hand2")
             label.pack(fill="x")
-            for w in (card, preview, label):
+            for w in (card, preview, label, *preview.winfo_children()):
                 w.bind("<ButtonRelease-1>", lambda e, n=name: self._setup_set_theme(n))
 
-    def _theme_preview(self, parent, th):
-        """A tiny drawing of the app in a given theme."""
-        w, h = 228, 146
-        cv = tk.Canvas(parent, width=w, height=h, bg=th["PAPER"], highlightthickness=0, cursor="hand2")
+    def _theme_preview(self, parent, th, th2=None):
+        """A tiny drawing of the app in a theme. With th2, the right half uses th2 (for "auto")."""
+        w, h, scale = 228, 146, 0.78
+        cv = tk.Canvas(parent, width=int(w * scale), height=int(h * scale), bg=th["PAPER"],
+                       highlightthickness=0, cursor="hand2")
+        self._draw_preview(cv, th, w, h)
+        cv.scale("all", 0, 0, scale, scale)
+        if th2 is not None:
+            # a second canvas over the right half; being its own widget, it clips the drawing for us
+            half = tk.Canvas(cv, width=int(w * scale / 2) + 1, height=int(h * scale), bg=th2["PAPER"],
+                             highlightthickness=0, cursor="hand2")
+            self._draw_preview(half, th2, w, h)
+            half.move("all", -w / 2, 0)
+            half.scale("all", 0, 0, scale, scale)
+            cv.create_window(int(w * scale / 2), 0, window=half, anchor="nw")
+        return cv
+
+    def _draw_preview(self, cv, th, w, h):
         cv.create_line(0, 18, w, 18, fill=th["RULE"])
         cv.create_oval(8, 5, 16, 13, outline=th["ACCENT"], width=2)
         cv.create_rectangle(22, 7, 64, 11, fill=th["INK"], outline="")
@@ -467,7 +515,7 @@ class App:
             cv.create_rectangle(10, 32 + k * 14, 44 if k else 38, 36 + k * 14,
                                 fill=th["INK"] if k == 0 else th["MUTED"], outline="")
         family = self.families["mono"] if th["MONO"] else self.families["serif"]
-        cv.create_text(70, 38, text="Aa", anchor="w", fill=th["RED"], font=(family, 15))
+        cv.create_text(70, 38, text="Aa", anchor="w", fill=th["RED"], font=(family, 12))
         cv.create_rectangle(70, 54, 180, 57, fill=th["MUTED"], outline="")
         cv.create_rectangle(70, 66, 112, 80, fill=th["INK"], outline="")
         cv.create_rectangle(118, 66, 160, 80, fill=th["CARD"], outline=th["RULE"])
@@ -476,7 +524,6 @@ class App:
             y = 101 + k * 11
             cv.create_rectangle(78, y, 96, y + 3, fill=color, outline="")
             cv.create_rectangle(104, y, 150 + (k % 2) * 20, y + 3, fill=color, outline="")
-        return cv
 
     def _setup_prefs(self, body):
         self._setup_heading(body, "setup.prefs_h", "setup.prefs_s")
@@ -530,7 +577,7 @@ class App:
 
     def finish_setup(self, skipped=False):
         self.cfg.lang = i18n.current()
-        self.cfg.theme = THEME
+        self.cfg.theme = CHOICE
         self.cfg.setup_done = True
         self.cfg.save()
         self.page = "scan"
@@ -642,7 +689,7 @@ class App:
         return page
 
     def _table(self, parent, columns, widths, stretch_col):
-        box = tk.Frame(parent, bg=CARD, highlightthickness=1, highlightbackground=RULE)
+        box = tk.Frame(parent, bg=CARD, highlightthickness=BORDER, highlightbackground=RULE)
         box.grid_columnconfigure(0, weight=1)
         box.grid_rowconfigure(0, weight=1)
         tree = ttk.Treeview(box, columns=[c for c, _ in columns], show="headings", style="WD.Treeview",
@@ -885,7 +932,7 @@ class App:
 
         tk.Label(page, text=t("watch.folders"), bg=PAPER, fg=INK, font=self.f["h2"]).grid(
             row=4, column=0, sticky="w", pady=(28, 8))
-        self.folder_box = tk.Frame(page, bg=CARD, highlightthickness=1, highlightbackground=RULE)
+        self.folder_box = tk.Frame(page, bg=CARD, highlightthickness=BORDER, highlightbackground=RULE)
         self.folder_box.grid(row=5, column=0, sticky="ew")
         self.folder_box.grid_columnconfigure(0, weight=1)
         add = tk.Frame(page, bg=PAPER)
@@ -895,7 +942,7 @@ class App:
 
         tk.Label(page, text=t("watch.activity"), bg=PAPER, fg=INK, font=self.f["h2"]).grid(
             row=7, column=0, sticky="w", pady=(28, 8))
-        logbox = tk.Frame(page, bg=CARD, highlightthickness=1, highlightbackground=RULE)
+        logbox = tk.Frame(page, bg=CARD, highlightthickness=BORDER, highlightbackground=RULE)
         logbox.grid(row=8, column=0, sticky="nsew")
         page.grid_rowconfigure(8, weight=1)
         self.log = tk.Text(logbox, bg=CARD, fg=INK, font=self.f["mono"], relief="flat", height=6,
@@ -1124,7 +1171,7 @@ class App:
         tk.Label(keyrow, text=t("set.key"), bg=PAPER, fg=MUTED, font=self.f["small"]).pack(side="left")
         self.key_var = tk.StringVar(value=self.cfg.abusech_key)
         key = tk.Entry(keyrow, textvariable=self.key_var, width=34, bg=CARD, fg=INK, relief="flat",
-                       font=self.f["mono"], insertbackground=INK, highlightthickness=1,
+                       font=self.f["mono"], insertbackground=INK, highlightthickness=BORDER,
                        highlightbackground=RULE, highlightcolor=INK, show="•")
         key.pack(side="left", padx=(10, 0), ipady=4)
         key.bind("<FocusOut>", lambda e: self._save_key())
@@ -1133,7 +1180,7 @@ class App:
         row = tk.Frame(s, bg=PAPER)
         row.pack(anchor="w")
         for col, (label, items, current, pick) in enumerate((
-                (t("set.theme"), [(t(f"theme.{k}"), k) for k in THEMES], THEME, self.set_theme),
+                (t("set.theme"), [(t(f"theme.{k}"), k) for k in THEME_CHOICES], CHOICE, self.set_theme),
                 (t("set.language"), [(name, code) for code, name in i18n.LANGS.items()], i18n.current(),
                  self.set_language))):
             cell = tk.Frame(row, bg=PAPER)
@@ -1245,7 +1292,7 @@ class App:
         return button
 
     def set_theme(self, name):
-        if name == THEME:
+        if name == CHOICE:
             return
         if self.scan_state == "running":
             self.theme_note.configure(text=t("set.busy"), fg=RED)
@@ -1258,6 +1305,22 @@ class App:
         self._fonts()
         self._style()
         self.build()
+
+    def _follow_system_theme(self):
+        """With "auto", switch when the operating system flips between light and dark."""
+        try:
+            if CHOICE == "auto" and self.scan_state != "running" and resolve_theme("auto") != THEME:
+                apply_theme("auto")
+                self.root.configure(bg=PAPER)
+                self._dark_title_bar()
+                self._fonts()
+                self._style()
+                if self.cfg.setup_done:
+                    self.build()
+                else:
+                    self.show_setup()
+        finally:
+            self.root.after(SYSTEM_THEME_CHECK_MS, self._follow_system_theme)
 
     def _dark_title_bar(self):
         """Windows 10/11 draw the title bar themselves; ask for a dark one in the dark themes."""
@@ -1391,6 +1454,7 @@ class App:
             if count:
                 self.tree_empty.place_forget()
         self.root.after(POLL_MS, self._drain)
+        self.root.after(SYSTEM_THEME_CHECK_MS, self._follow_system_theme)
 
     def close(self):
         if self.scan_stop:

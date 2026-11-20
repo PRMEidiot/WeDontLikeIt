@@ -72,8 +72,12 @@ language), a theme and a few preferences. After that, four pages, nothing hidden
   quarantined, trusted (if it's a false positive) or opened in your file manager.
 - **Protection**: watches folders (Downloads and Desktop by default) and checks new files as soon as they land.
 - **Quarantine**: everything that was locked away, with restore and delete.
-- **Settings**: heuristics, archives, automatic quarantine, signature updates, language and theme
-  (light, dark, or a green-on-black terminal look).
+- **Settings**: heuristics, archives, automatic quarantine, signature updates, language and theme.
+
+Themes: Light, Dark, Match my system (follows your OS between light and dark, and switches to high
+contrast when Windows' high contrast mode is on), Green terminal, Amber terminal, and High contrast
+(pure black and white, thicker borders, slightly larger text). Every theme is checked against the
+WCAG contrast guidelines in the tests.
 
 ## The command line
 
