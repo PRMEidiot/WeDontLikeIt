@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wedontlikeit"
+version = "0.3.0"
+description = "A small antivirus for Windows, macOS and Linux"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+classifiers = [
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security",
+]
+
+[project.optional-dependencies]
+yara = ["yara-python>=4.3"]
+
+[project.scripts]
+wedontlikeit = "wedontlikeit.cli:main"
+
+[project.gui-scripts]
+wedontlikeit-gui = "wedontlikeit.gui:main"
+
+[tool.setuptools]
+packages = ["wedontlikeit"]
+
+[tool.setuptools.package-data]
+wedontlikeit = ["data/*", "locales/*.json"]

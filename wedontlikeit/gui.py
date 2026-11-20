@@ -1,0 +1,1103 @@
+"""Desktop app, built on tkinter (ships with Python on Windows, macOS and most Linux distros)."""
+
+from __future__ import annotations
+
+import os
+import queue
+import sys
+import threading
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+from . import __version__, i18n, platforms, updater
+from .config import Config
+from .i18n import t
+from .quarantine import Quarantine
+from .scanner import SEV_RANK, Engine, ScanConfig
+from .signatures import SignatureDB, add_to_allowlist
+
+try:
+    import tkinter as tk
+    from tkinter import filedialog, messagebox, ttk
+    from tkinter import font as tkfont
+except ImportError:  # pragma: no cover - depends on how Python was installed
+    tk = None
+
+# ------------------------------------------------------------------ palette
+PAPER = "#F2EFE7"
+CARD = "#FBFAF6"
+INK = "#1B1A17"
+INK_HOVER = "#3A3731"
+MUTED = "#6F6A60"
+FAINT = "#A7A296"
+RULE = "#DAD4C7"
+HOVER = "#E7E2D6"
+RED = "#B5321C"
+AMBER = "#94600E"
+GREEN = "#2F6A42"
+SEV_FG = {"high": RED, "medium": AMBER, "low": INK}
+
+# Chinese/Japanese/Korean fonts that come with Windows, macOS and common Linux distros
+CJK_FONTS = {
+    "ja": {"sans": ["Yu Gothic UI", "Meiryo UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+                    "Noto Sans CJK JP", "Noto Sans JP", "IPAexGothic"],
+           "serif": ["Yu Mincho", "Hiragino Mincho ProN", "Noto Serif CJK JP", "Noto Serif JP"]},
+    "ko": {"sans": ["Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans CJK KR", "Noto Sans KR", "NanumGothic"],
+           "serif": ["Batang", "AppleMyungjo", "Noto Serif CJK KR", "Noto Serif KR", "NanumMyeongjo"]},
+    "zh": {"sans": ["Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC",
+                    "Noto Sans SC", "WenQuanYi Micro Hei", "Source Han Sans SC"],
+           "serif": ["SimSun", "Songti SC", "Noto Serif CJK SC", "Noto Serif SC", "Source Han Serif SC"]},
+}
+
+POLL_MS = 80
+WATCH_INTERVAL = 2.0
+
+
+def _pick(families: set[str], wanted: list[str], fallback: str) -> str:
+    for w in wanted:
+        if w in families:
+            return w
+    return fallback
+
+
+def _elide(text: str, max_chars: int) -> str:
+    if len(text) <= max_chars:
+        return text
+    keep = max(max_chars - 1, 8)
+    return "…" + text[-keep:]
+
+
+def _short_path(path: str, limit: int = 64) -> str:
+    """~/Downloads/x.exe instead of /home/me/Downloads/x.exe, with the middle cut when it's long."""
+    home = str(Path.home())
+    if path.startswith(home + os.sep) or path.startswith(home + "/"):
+        path = "~" + path[len(home):]
+    if len(path) <= limit:
+        return path
+    sep = "\\" if "\\" in path and "/" not in path else "/"
+    parts = path.split(sep)
+    head, tail = parts[0], parts[-1]
+    rest = parts[1:-1]
+    kept: list[str] = []
+    while rest and len(head) + len(tail) + sum(len(p) + 1 for p in kept) + len(rest[-1]) + 4 <= limit:
+        kept.insert(0, rest.pop())
+    middle = [head, "…", *kept, tail] if rest else [head, *kept, tail]
+    out = sep.join(middle)
+    return out if len(out) <= limit + 8 else "…" + path[-limit:]
+
+
+def _finding_order(d):
+    return (-SEV_RANK[d.severity], d.path, d.inner, d.name)
+
+
+def _short_error(exc: BaseException) -> str:
+    text = str(exc).strip().splitlines()
+    first = next((line.strip() for line in text if line.strip()), type(exc).__name__)
+    return first[:160]
+
+
+def _ago(iso: str) -> str:
+    try:
+        then = datetime.fromisoformat(iso)
+    except ValueError:
+        return ""
+    secs = (datetime.now(timezone.utc) - then).total_seconds()
+    if secs < 90:
+        return t("time.now")
+    if secs < 3600:
+        return t("time.min", n=int(secs // 60))
+    if secs < 86400:
+        return t("time.hour", n=int(secs // 3600))
+    return t("time.day", n=int(secs // 86400))
+
+
+# ================================================================== widgets
+class FlatButton(tk.Label if tk else object):
+    """A label that behaves like a button. tk.Button ignores colors on macOS, so this is used instead."""
+
+    STYLES = {
+        "primary": dict(bg=INK, fg=PAPER, hover=INK_HOVER, border=INK),
+        "secondary": dict(bg=CARD, fg=INK, hover=HOVER, border=RULE),
+        "danger": dict(bg=CARD, fg=RED, hover=HOVER, border=RULE),
+    }
+
+    def __init__(self, parent, text, command, kind="secondary", font=None):
+        st = self.STYLES[kind]
+        super().__init__(parent, text=text, bg=st["bg"], fg=st["fg"], font=font, padx=16, pady=7,
+                         cursor="hand2", highlightthickness=1, highlightbackground=st["border"],
+                         highlightcolor=st["border"])
+        self._st = st
+        self._command = command
+        self._enabled = True
+        self.bind("<Enter>", lambda e: self._enabled and self.configure(bg=st["hover"]))
+        self.bind("<Leave>", lambda e: self.configure(bg=st["bg"]))
+        self.bind("<ButtonRelease-1>", self._click)
+
+    def _click(self, _e):
+        if self._enabled and self._command:
+            self._command()
+
+    def set_enabled(self, enabled: bool) -> None:
+        self._enabled = enabled
+        self.configure(fg=self._st["fg"] if enabled else FAINT, cursor="hand2" if enabled else "arrow")
+
+
+class LinkButton(tk.Label if tk else object):
+    def __init__(self, parent, text, command, font, fg=MUTED, bg=PAPER):
+        super().__init__(parent, text=text, fg=fg, bg=bg, font=font, cursor="hand2")
+        self._font = tkfont.Font(font=font)
+        self._ufont = tkfont.Font(font=font)
+        self._ufont.configure(underline=True)
+        self.bind("<Enter>", lambda e: self.configure(font=self._ufont, fg=INK))
+        self.bind("<Leave>", lambda e: self.configure(font=self._font, fg=fg))
+        self.bind("<ButtonRelease-1>", lambda e: command())
+
+
+class Check(tk.Frame if tk else object):
+    """A checkbox drawn by hand so it looks the same on every system."""
+
+    def __init__(self, parent, text, value: bool, on_change, font, bg=PAPER, wrap=520):
+        super().__init__(parent, bg=bg)
+        self.value = value
+        self.on_change = on_change
+        self.box = tk.Canvas(self, width=16, height=16, bg=bg, highlightthickness=0, cursor="hand2")
+        self.box.grid(row=0, column=0, sticky="n", pady=(2, 0))
+        self.label = tk.Label(self, text=text, bg=bg, fg=INK, font=font, justify="left",
+                              wraplength=wrap, cursor="hand2", anchor="w")
+        self.label.grid(row=0, column=1, sticky="w", padx=(10, 0))
+        for w in (self, self.box, self.label):
+            w.bind("<ButtonRelease-1>", self._toggle)
+        self._draw()
+
+    def _draw(self):
+        c = self.box
+        c.delete("all")
+        if self.value:
+            c.create_rectangle(1, 1, 15, 15, fill=INK, outline=INK)
+            c.create_line(4, 8.5, 7, 11.5, 12.5, 4.5, fill=PAPER, width=2, capstyle="round", joinstyle="round")
+        else:
+            c.create_rectangle(1, 1, 15, 15, fill=CARD, outline=FAINT)
+
+    def _toggle(self, _e=None):
+        self.value = not self.value
+        self._draw()
+        self.on_change(self.value)
+
+
+class Progress(tk.Canvas if tk else object):
+    """A thin line with a sliding segment: we don't know the file count in advance."""
+
+    def __init__(self, parent, bg=PAPER):
+        super().__init__(parent, height=3, bg=bg, highlightthickness=0)
+        self._running = False
+        self._x = 0.0
+        self.bind("<Configure>", lambda e: self._paint())
+
+    def start(self):
+        if not self._running:
+            self._running = True
+            self._tick()
+
+    def stop(self):
+        self._running = False
+        self._paint()
+
+    def _paint(self):
+        self.delete("all")
+        w = self.winfo_width()
+        if not self._running:  # idle: just a hairline
+            self.create_rectangle(0, 1, w, 2, fill=RULE, width=0)
+        else:
+            self.create_rectangle(0, 0, w, 3, fill=RULE, width=0)
+            seg = max(w * 0.22, 60)
+            x = (self._x % 1.0) * (w + seg) - seg
+            self.create_rectangle(x, 0, x + seg, 3, fill=INK, width=0)
+
+    def _tick(self):
+        if not self._running:
+            return
+        self._x += 0.012
+        self._paint()
+        self.after(16, self._tick)
+
+
+def make_icon(size: int = 64) -> "tk.PhotoImage":
+    """The app icon: a red 'no' sign, drawn pixel by pixel (no image files needed)."""
+    img = tk.PhotoImage(width=size, height=size)
+    c, r_out, r_in, half = size / 2, size * 0.47, size * 0.35, size * 0.065
+    for y in range(size):
+        xs = []
+        for x in range(size):
+            dx, dy = x + 0.5 - c, y + 0.5 - c
+            d = (dx * dx + dy * dy) ** 0.5
+            if r_in <= d <= r_out or (d < r_out and abs(dx - dy) / 1.4142 < half):
+                xs.append(x)
+        for x in xs:
+            img.put(RED, (x, y))
+    return img
+
+
+# ====================================================================== app
+class App:
+    def __init__(self):
+        if sys.platform == "win32":  # crisp text on high-DPI screens
+            try:
+                import ctypes
+                ctypes.windll.shcore.SetProcessDpiAwareness(1)
+            except Exception:  # noqa: BLE001
+                pass
+        self.cfg = Config.load()
+        i18n.set_lang(i18n.resolve(None))
+        if not self.cfg.watch_folders:
+            self.cfg.watch_folders = [str(p) for p in platforms.watch_default_paths()]
+
+        self.root = tk.Tk()
+        self.root.title("WeDontLikeIt")
+        self.root.geometry("1060x720")
+        self.root.minsize(900, 660)
+        self.root.configure(bg=PAPER)
+        self._icon = make_icon()
+        self.root.iconphoto(True, self._icon)
+        self.root.protocol("WM_DELETE_WINDOW", self.close)
+
+        self._fonts()
+        self._style()
+
+        self.events: queue.Queue = queue.Queue()
+        self.quarantine = Quarantine()
+        self.detections: dict[str, object] = {}   # tree iid -> Detection
+        self.scan_stop: threading.Event | None = None
+        self.scan_files = 0
+        self.scan_state = "idle"                   # idle | running | clean | found | stopped
+        self.last_path = ""
+        self.watch_stop: threading.Event | None = None
+        self.activity: list[tuple[str, str, str]] = []  # (time, text, color)
+        self.page = "scan"
+        self.db_counts = self._db_counts()
+
+        self.build()
+        self.root.after(POLL_MS, self._drain)
+
+    # ----------------------------------------------------------- look
+    def _fonts(self):
+        fam = set(tkfont.families(self.root))
+        base = tkfont.nametofont("TkDefaultFont").actual("family")
+        mono_base = tkfont.nametofont("TkFixedFont").actual("family")
+        sans = _pick(fam, ["Inter", "Segoe UI", "SF Pro Text", "Helvetica Neue", "Noto Sans",
+                           "Cantarell", "DejaVu Sans"], base)
+        serif = _pick(fam, ["Charter", "Iowan Old Style", "Source Serif 4", "Georgia",
+                            "Noto Serif", "DejaVu Serif", "Times New Roman"], sans)
+        cjk = CJK_FONTS.get(i18n.current())
+        if cjk:  # Latin fonts have no Chinese/Japanese/Korean glyphs; pick the system's own
+            sans = _pick(fam, cjk["sans"], sans)
+            serif = _pick(fam, cjk["serif"], sans)
+        mono = _pick(fam, ["JetBrains Mono", "Cascadia Mono", "SF Mono", "Menlo", "Consolas",
+                           "Noto Sans Mono", "DejaVu Sans Mono"], mono_base)
+        self.f = {
+            "body": (sans, 10),
+            "body_b": (sans, 10, "bold"),
+            "small": (sans, 9),
+            "eyebrow": (sans, 8, "bold"),
+            "nav": (sans, 11),
+            "nav_on": (sans, 11, "bold"),
+            "mark": (serif, 15, "bold"),
+            "h1": (serif, 28),
+            "h2": (serif, 15),
+            "mono": (mono, 9),
+            "mono_s": (mono, 8),
+        }
+        self.mono_char = tkfont.Font(font=self.f["mono"]).measure("0") or 7
+
+    def _style(self):
+        s = ttk.Style(self.root)
+        s.theme_use("clam")
+        s.configure("WD.Treeview", background=CARD, fieldbackground=CARD, foreground=INK,
+                    rowheight=30, borderwidth=0, relief="flat", font=self.f["body"])
+        s.configure("WD.Treeview.Heading", background=CARD, foreground=MUTED, font=self.f["eyebrow"],
+                    relief="flat", borderwidth=0, padding=(10, 8))
+        s.map("WD.Treeview", background=[("selected", HOVER)], foreground=[("selected", INK)])
+        s.map("WD.Treeview.Heading", background=[("active", CARD)], relief=[("active", "flat")])
+        s.layout("WD.Treeview", [("WD.Treeview.treearea", {"sticky": "nswe"})])
+        s.configure("WD.Vertical.TScrollbar", background=RULE, troughcolor=CARD, bordercolor=CARD,
+                    lightcolor=RULE, darkcolor=RULE, arrowcolor=MUTED, gripcount=0, arrowsize=11)
+        s.map("WD.Vertical.TScrollbar", background=[("active", FAINT)])
+
+    # ---------------------------------------------------------- layout
+    def build(self):
+        for w in self.root.winfo_children():
+            w.destroy()
+        root = self.root
+        root.grid_columnconfigure(2, weight=1)
+        root.grid_rowconfigure(2, weight=1)
+
+        # header
+        header = tk.Frame(root, bg=PAPER, height=58)
+        header.grid(row=0, column=0, columnspan=3, sticky="ew")
+        header.grid_propagate(False)
+        logo = tk.Canvas(header, width=22, height=22, bg=PAPER, highlightthickness=0)
+        logo.create_oval(2, 2, 20, 20, outline=RED, width=2.6)
+        logo.create_line(5.6, 5.6, 16.4, 16.4, fill=RED, width=2.6)
+        logo.place(x=24, rely=0.5, anchor="w")
+        tk.Label(header, text="WeDontLikeIt", bg=PAPER, fg=INK, font=self.f["mark"]).place(x=54, rely=0.5, anchor="w")
+        self.header_info = tk.Label(header, bg=PAPER, fg=MUTED, font=self.f["small"])
+        self.header_info.place(relx=1.0, x=-24, rely=0.5, anchor="e")
+        self._update_header()
+        tk.Frame(root, bg=RULE, height=1).grid(row=1, column=0, columnspan=3, sticky="ew")
+
+        # sidebar
+        side = tk.Frame(root, bg=PAPER, width=208)
+        side.grid(row=2, column=0, sticky="ns")
+        side.pack_propagate(False)
+        tk.Frame(root, bg=RULE, width=1).grid(row=2, column=1, sticky="ns")
+        self.nav: dict[str, tuple] = {}
+        tk.Frame(side, bg=PAPER, height=18).pack()
+        for key in ("scan", "watch", "quarantine", "settings"):
+            self._nav_item(side, key)
+        self.side_footer = tk.Label(side, bg=PAPER, fg=MUTED, font=self.f["small"], justify="left", anchor="w",
+                                    wraplength=160)
+        self.side_footer.pack(side="bottom", fill="x", padx=24, pady=22)
+        self._update_footer()
+
+        # pages
+        self.content = tk.Frame(root, bg=PAPER)
+        self.content.grid(row=2, column=2, sticky="nsew")
+        self.content.grid_columnconfigure(0, weight=1)
+        self.content.grid_rowconfigure(0, weight=1)
+        self.pages = {
+            "scan": self._build_scan(),
+            "watch": self._build_watch(),
+            "quarantine": self._build_quarantine(),
+            "settings": self._build_settings(),
+        }
+        self.show(self.page)
+
+    def _nav_item(self, side, key):
+        row = tk.Frame(side, bg=PAPER, cursor="hand2")
+        row.pack(fill="x", pady=1)
+        bar = tk.Frame(row, bg=PAPER, width=3)
+        bar.pack(side="left", fill="y")
+        lbl = tk.Label(row, text=t(f"nav.{key}"), bg=PAPER, fg=MUTED, font=self.f["nav"], anchor="w",
+                       padx=21, pady=9, cursor="hand2")
+        lbl.pack(side="left", fill="x", expand=True)
+        badge = tk.Label(row, text="", bg=PAPER, fg=MUTED, font=self.f["small"], padx=18)
+        badge.pack(side="right")
+
+        def enter(_e):
+            if self.page != key:
+                for w in (row, lbl, badge):
+                    w.configure(bg=HOVER)
+
+        def leave(_e):
+            if self.page != key:
+                for w in (row, lbl, badge):
+                    w.configure(bg=PAPER)
+
+        for w in (row, lbl, badge):
+            w.bind("<Enter>", enter)
+            w.bind("<Leave>", leave)
+            w.bind("<ButtonRelease-1>", lambda e, k=key: self.show(k))
+        self.nav[key] = (row, bar, lbl, badge)
+
+    def show(self, key):
+        self.page = key
+        for k, (row, bar, lbl, badge) in self.nav.items():
+            on = k == key
+            for w in (row, lbl, badge):
+                w.configure(bg=CARD if on else PAPER)
+            bar.configure(bg=RED if on else PAPER)
+            lbl.configure(fg=INK if on else MUTED, font=self.f["nav_on"] if on else self.f["nav"])
+        for k, page in self.pages.items():
+            if k == key:
+                page.grid(row=0, column=0, sticky="nsew")
+            else:
+                page.grid_remove()
+        if key == "quarantine":
+            self._refresh_quarantine()
+        self._update_badges()
+
+    def _page(self, eyebrow_key):
+        page = tk.Frame(self.content, bg=PAPER, padx=40, pady=30)
+        page.grid_columnconfigure(0, weight=1)
+        tk.Label(page, text=t(eyebrow_key), bg=PAPER, fg=RED, font=self.f["eyebrow"], anchor="w").grid(
+            row=0, column=0, sticky="w")
+        return page
+
+    def _table(self, parent, columns, widths, stretch_col):
+        box = tk.Frame(parent, bg=CARD, highlightthickness=1, highlightbackground=RULE)
+        box.grid_columnconfigure(0, weight=1)
+        box.grid_rowconfigure(0, weight=1)
+        tree = ttk.Treeview(box, columns=[c for c, _ in columns], show="headings", style="WD.Treeview",
+                            selectmode="extended")
+        for (col, title), width in zip(columns, widths):
+            tree.heading(col, text=i18n.upper(title), anchor="w")
+            tree.column(col, width=width, anchor="w", stretch=(col == stretch_col))
+        sb = ttk.Scrollbar(box, orient="vertical", command=tree.yview, style="WD.Vertical.TScrollbar")
+        tree.configure(yscrollcommand=sb.set)
+        tree.grid(row=0, column=0, sticky="nsew", padx=(6, 0), pady=(2, 6))
+        sb.grid(row=0, column=1, sticky="ns", pady=6, padx=(0, 4))
+        for sev, color in SEV_FG.items():
+            tree.tag_configure(sev, foreground=color)
+        empty = tk.Label(box, bg=CARD, fg=FAINT, font=self.f["body"])
+        return box, tree, empty
+
+    # ------------------------------------------------------------ scan
+    def _build_scan(self):
+        page = self._page("scan.eyebrow")
+        self.scan_h = tk.Label(page, bg=PAPER, fg=INK, font=self.f["h1"], anchor="w")
+        self.scan_h.grid(row=1, column=0, sticky="w", pady=(6, 0))
+        self.scan_s = tk.Label(page, bg=PAPER, fg=MUTED, font=self.f["body"], anchor="w", justify="left")
+        self.scan_s.grid(row=2, column=0, sticky="w", pady=(4, 0))
+
+        actions = tk.Frame(page, bg=PAPER)
+        actions.grid(row=3, column=0, sticky="w", pady=(22, 0))
+        self.scan_buttons = tk.Frame(actions, bg=PAPER)
+        FlatButton(self.scan_buttons, t("btn.quick"), self.quick_scan, "primary", self.f["body_b"]).pack(side="left")
+        FlatButton(self.scan_buttons, t("btn.folder"), self.pick_folder, "secondary", self.f["body"]).pack(side="left", padx=(10, 0))
+        FlatButton(self.scan_buttons, t("btn.file"), self.pick_file, "secondary", self.f["body"]).pack(side="left", padx=(10, 0))
+        self.stop_button = FlatButton(actions, t("btn.stop"), self.stop_scan, "danger", self.f["body_b"])
+
+        self.progress = Progress(page)
+        self.progress.grid(row=4, column=0, sticky="ew", pady=(22, 0))
+        self.current = tk.Label(page, bg=PAPER, fg=FAINT, font=self.f["mono_s"], anchor="w")
+        self.current.grid(row=5, column=0, sticky="ew", pady=(6, 0))
+
+        head = tk.Frame(page, bg=PAPER)
+        head.grid(row=6, column=0, sticky="ew", pady=(18, 8))
+        tk.Label(head, text=t("findings.title"), bg=PAPER, fg=INK, font=self.f["h2"]).pack(side="left")
+        self.findings_count = tk.Label(head, bg=PAPER, fg=MUTED, font=self.f["small"])
+        self.findings_count.pack(side="left", padx=(10, 0), pady=(4, 0))
+
+        box, self.tree, self.tree_empty = self._table(
+            page,
+            [("sev", t("col.severity")), ("threat", t("col.threat")), ("file", t("col.file"))],
+            [96, 280, 420], "file")
+        box.grid(row=7, column=0, sticky="nsew")
+        page.grid_rowconfigure(7, weight=1)
+        self.tree_empty.configure(text=t("findings.empty"))
+        self.tree.bind("<<TreeviewSelect>>", lambda e: self._update_result_actions())
+        self.tree.bind("<Double-1>", lambda e: self.reveal_selected())
+
+        bottom = tk.Frame(page, bg=PAPER)
+        bottom.grid(row=8, column=0, sticky="ew", pady=(12, 0))
+        self.btn_q = FlatButton(bottom, t("btn.quarantine"), self.quarantine_selected, "secondary", self.f["body"])
+        self.btn_q.pack(side="left")
+        self.btn_allow = FlatButton(bottom, t("btn.allow"), self.allow_selected, "secondary", self.f["body"])
+        self.btn_allow.pack(side="left", padx=(10, 0))
+        self.btn_reveal = FlatButton(bottom, t("btn.reveal"), self.reveal_selected, "secondary", self.f["body"])
+        self.btn_reveal.pack(side="left", padx=(10, 0))
+        self.note = tk.Label(bottom, bg=PAPER, fg=MUTED, font=self.f["small"], wraplength=420,
+                             justify="left", anchor="w")
+        self.note.pack(side="left", padx=(16, 0), fill="x", expand=True)
+
+        old = list(self.detections.values())  # after a language switch
+        self.detections = {}
+        for d in sorted(old, key=_finding_order):
+            self._insert_detection(d)
+        self._render_scan_state()
+        self._update_result_actions()
+        return page
+
+    def _render_scan_state(self):
+        n = self.scan_files
+        st = self.scan_state
+        k = self._flagged_count()
+        if st == "running":
+            h, s = t("scan.running_h"), t("scan.running_s", n=n)
+        elif st == "clean":
+            h, s = t("scan.clean_h"), t("scan.clean_s", n=n)
+        elif st == "found":
+            h = t("scan.found_h", n=k)
+            s = t("scan.found_s", n=n)
+        elif st == "stopped":
+            h, s = t("scan.stopped_h"), t("scan.stopped_s", n=n)
+        else:
+            h, s = t("scan.idle_h"), t("scan.idle_s")
+        self.scan_h.configure(text=h, fg=RED if st == "found" else INK)
+        self.scan_s.configure(text=s)
+        if st == "running":
+            self.scan_buttons.pack_forget()
+            self.stop_button.pack(side="left")
+            self.progress.start()
+        else:
+            self.stop_button.pack_forget()
+            self.scan_buttons.pack(side="left")
+            self.progress.stop()
+            self.current.configure(text="")
+        count = len(self.detections)
+        self.findings_count.configure(text=str(count) if count else "")
+        if count:
+            self.tree_empty.place_forget()
+        else:
+            self.tree_empty.place(relx=0.5, rely=0.5, anchor="center")
+
+    def _sort_findings(self):
+        order = sorted(self.detections.items(), key=lambda kv: _finding_order(kv[1]))
+        for idx, (iid, _d) in enumerate(order):
+            self.tree.move(iid, "", idx)
+
+    def _flagged_count(self) -> int:
+        return len({d.path for d in self.detections.values()})
+
+    def quick_scan(self):
+        self.start_scan(platforms.quick_scan_paths())
+
+    def pick_folder(self):
+        d = filedialog.askdirectory(parent=self.root, title=t("dialog.folder"))
+        if d:
+            self.start_scan([Path(d)])
+
+    def pick_file(self):
+        f = filedialog.askopenfilename(parent=self.root, title=t("dialog.file"))
+        if f:
+            self.start_scan([Path(f)])
+
+    def _engine(self) -> Engine:
+        excl = [*platforms.system_excludes(), platforms.data_dir()]
+        cfg = ScanConfig(heuristics=self.cfg.heuristics, archives=self.cfg.archives,
+                         exclude=tuple(str(p) for p in excl))
+        return Engine(SignatureDB.default(), cfg)
+
+    def start_scan(self, targets):
+        if self.scan_state == "running":
+            return
+        self.tree.delete(*self.tree.get_children())
+        self.detections.clear()
+        self.note.configure(text="")
+        self.scan_files = 0
+        self.scan_state = "running"
+        self._render_scan_state()
+        self._update_result_actions()
+        self.scan_stop = stop = threading.Event()
+        engine = self._engine()
+        jobs = min(os.cpu_count() or 1, 4)
+
+        def work():
+            try:
+                res = engine.scan(targets, on_file=lambda p, d: self.events.put(("file", str(p), d)),
+                                  jobs=jobs, stop=stop)
+                self.events.put(("done", res))
+            except Exception as exc:  # noqa: BLE001
+                self.events.put(("scan_error", _short_error(exc)))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def stop_scan(self):
+        if self.scan_stop:
+            self.scan_stop.set()
+
+    def _insert_detection(self, d):
+        label = _short_path(d.path) + (f"  ›  {d.inner}" if d.inner else "")
+        iid = self.tree.insert("", "end", values=(i18n.upper(t(f"sev.{d.severity}")), d.name, label),
+                               tags=(d.severity,))
+        self.detections[iid] = d
+        return iid
+
+    def _auto_quarantine(self, path: Path, dets) -> bool:
+        if not self.cfg.auto_quarantine or not dets:
+            return False
+        threshold = SEV_RANK["medium"] if self.cfg.quarantine_medium else SEV_RANK["high"]
+        worst = max(dets, key=lambda d: SEV_RANK[d.severity])
+        if SEV_RANK[worst.severity] < threshold:
+            return False
+        try:
+            self.quarantine.add(path, worst.name)
+            return True
+        except OSError:
+            return False
+
+    def _selected_paths(self) -> list[str]:
+        seen: list[str] = []
+        for iid in self.tree.selection():
+            p = self.detections[iid].path
+            if p not in seen:
+                seen.append(p)
+        return seen
+
+    def _remove_rows_for(self, paths):
+        for iid, d in list(self.detections.items()):
+            if d.path in paths:
+                self.tree.delete(iid)
+                del self.detections[iid]
+        self._render_scan_state()
+        self._update_result_actions()
+
+    def _update_result_actions(self):
+        any_sel = bool(self.tree.selection())
+        for b in (self.btn_q, self.btn_allow, self.btn_reveal):
+            b.set_enabled(any_sel)
+
+    def quarantine_selected(self):
+        paths = self._selected_paths()
+        done, failed = [], None
+        for p in paths:
+            dets = [d for d in self.detections.values() if d.path == p]
+            worst = max(dets, key=lambda d: SEV_RANK[d.severity])
+            try:
+                self.quarantine.add(Path(p), worst.name)
+                done.append(p)
+            except OSError as exc:
+                failed = t("note.failed", name=Path(p).name, err=exc.strerror or exc)
+        self._remove_rows_for(done)
+        self.note.configure(text=failed or t("note.quarantined", n=len(done)), fg=RED if failed else MUTED)
+        self._update_badges()
+
+    def allow_selected(self):
+        paths = [p for p in self._selected_paths() if Path(p).exists()]
+        add_to_allowlist(paths)
+        self._remove_rows_for(paths)
+        self.note.configure(text=t("note.allowed", n=len(paths)), fg=MUTED)
+
+    def reveal_selected(self):
+        paths = self._selected_paths()
+        if paths and Path(paths[0]).exists():
+            platforms.reveal(Path(paths[0]))
+
+    # ----------------------------------------------------------- watch
+    def _build_watch(self):
+        page = self._page("watch.eyebrow")
+        self.watch_h = tk.Label(page, bg=PAPER, fg=INK, font=self.f["h1"], anchor="w")
+        self.watch_h.grid(row=1, column=0, sticky="w", pady=(6, 0))
+        tk.Label(page, text=t("watch.s"), bg=PAPER, fg=MUTED, font=self.f["body"], anchor="w",
+                 justify="left", wraplength=620).grid(row=2, column=0, sticky="w", pady=(4, 0))
+        actions = tk.Frame(page, bg=PAPER)
+        actions.grid(row=3, column=0, sticky="w", pady=(22, 0))
+        self.watch_on_btn = FlatButton(actions, t("btn.watch_on"), self.start_watch, "primary", self.f["body_b"])
+        self.watch_off_btn = FlatButton(actions, t("btn.watch_off"), self.stop_watch, "secondary", self.f["body_b"])
+
+        tk.Label(page, text=t("watch.folders"), bg=PAPER, fg=INK, font=self.f["h2"]).grid(
+            row=4, column=0, sticky="w", pady=(28, 8))
+        self.folder_box = tk.Frame(page, bg=CARD, highlightthickness=1, highlightbackground=RULE)
+        self.folder_box.grid(row=5, column=0, sticky="ew")
+        self.folder_box.grid_columnconfigure(0, weight=1)
+        add = tk.Frame(page, bg=PAPER)
+        add.grid(row=6, column=0, sticky="w", pady=(10, 0))
+        self.add_folder_btn = FlatButton(add, t("btn.add_folder"), self.add_watch_folder, "secondary", self.f["body"])
+        self.add_folder_btn.pack(side="left")
+
+        tk.Label(page, text=t("watch.activity"), bg=PAPER, fg=INK, font=self.f["h2"]).grid(
+            row=7, column=0, sticky="w", pady=(28, 8))
+        logbox = tk.Frame(page, bg=CARD, highlightthickness=1, highlightbackground=RULE)
+        logbox.grid(row=8, column=0, sticky="nsew")
+        page.grid_rowconfigure(8, weight=1)
+        self.log = tk.Text(logbox, bg=CARD, fg=INK, font=self.f["mono"], relief="flat", height=6,
+                           padx=14, pady=10, wrap="none", highlightthickness=0, cursor="arrow")
+        self.log.pack(fill="both", expand=True)
+        for name, color in (("time", FAINT), ("red", RED), ("muted", MUTED), ("ink", INK)):
+            self.log.tag_configure(name, foreground=color)
+        self._render_folders()
+        self._render_log()
+        self._render_watch_state()
+        return page
+
+    def _render_folders(self):
+        for w in self.folder_box.winfo_children():
+            w.destroy()
+        on = self.watch_stop is not None
+        if not self.cfg.watch_folders:
+            tk.Label(self.folder_box, text=t("watch.no_folders"), bg=CARD, fg=FAINT, font=self.f["body"],
+                     padx=14, pady=12, anchor="w").grid(row=0, column=0, sticky="w")
+        for i, folder in enumerate(self.cfg.watch_folders):
+            if i:
+                tk.Frame(self.folder_box, bg=RULE, height=1).grid(row=2 * i - 1, column=0, columnspan=2, sticky="ew", padx=14)
+            tk.Label(self.folder_box, text=_short_path(folder, 80), bg=CARD, fg=INK, font=self.f["mono"], anchor="w",
+                     padx=14, pady=10).grid(row=2 * i, column=0, sticky="ew")
+            if not on:
+                LinkButton(self.folder_box, t("btn.remove"), lambda f=folder: self.remove_watch_folder(f),
+                           self.f["small"], bg=CARD).grid(row=2 * i, column=1, padx=14)
+        self.add_folder_btn.set_enabled(not on)
+
+    def _render_watch_state(self):
+        on = self.watch_stop is not None
+        n = len(self.cfg.watch_folders)
+        if on:
+            self.watch_h.configure(text=t("watch.on_h", n=n), fg=GREEN)
+            self.watch_on_btn.pack_forget()
+            self.watch_off_btn.pack(side="left")
+        else:
+            self.watch_h.configure(text=t("watch.off_h"), fg=INK)
+            self.watch_off_btn.pack_forget()
+            self.watch_on_btn.pack(side="left")
+        self._update_footer()
+
+    def _log(self, text, color="ink"):
+        self.activity.append((time.strftime("%H:%M:%S"), text, color))
+        self.activity = self.activity[-500:]
+        self._render_log()
+
+    def _render_log(self):
+        self.log.configure(state="normal")
+        self.log.delete("1.0", "end")
+        if not self.activity:
+            self.log.insert("end", t("watch.no_activity"), "muted")
+        for ts, text, color in self.activity:
+            self.log.insert("end", ts + "  ", "time")
+            self.log.insert("end", text + "\n", color)
+        self.log.see("end")
+        self.log.configure(state="disabled")
+
+    def add_watch_folder(self):
+        d = filedialog.askdirectory(parent=self.root, title=t("dialog.watch"))
+        if d and d not in self.cfg.watch_folders:
+            self.cfg.watch_folders.append(d)
+            self.cfg.save()
+            self._render_folders()
+            self._render_watch_state()
+
+    def remove_watch_folder(self, folder):
+        self.cfg.watch_folders = [f for f in self.cfg.watch_folders if f != folder]
+        self.cfg.save()
+        self._render_folders()
+        self._render_watch_state()
+
+    def start_watch(self):
+        from .monitor import Monitor
+
+        folders = [Path(f) for f in self.cfg.watch_folders if Path(f).is_dir()]
+        if not folders:
+            self._log(t("watch.no_folders"), "red")
+            return
+        self.watch_stop = stop = threading.Event()
+        engine = self._engine()
+
+        def work():
+            try:
+                mon = Monitor(engine, folders)
+                while not stop.wait(WATCH_INTERVAL):
+                    for path, dets in mon.poll():
+                        self.events.put(("watch_hit", path, dets))
+            except Exception as exc:  # noqa: BLE001
+                self.events.put(("watch_error", str(exc)))
+
+        threading.Thread(target=work, daemon=True).start()
+        self._log(t("watch.started"), "muted")
+        self._render_folders()
+        self._render_watch_state()
+
+    def stop_watch(self):
+        if self.watch_stop:
+            self.watch_stop.set()
+            self.watch_stop = None
+            self._log(t("watch.stopped"), "muted")
+        self._render_folders()
+        self._render_watch_state()
+
+    # ------------------------------------------------------ quarantine
+    def _build_quarantine(self):
+        page = self._page("q.eyebrow")
+        self.q_h = tk.Label(page, bg=PAPER, fg=INK, font=self.f["h1"], anchor="w")
+        self.q_h.grid(row=1, column=0, sticky="w", pady=(6, 0))
+        tk.Label(page, text=t("q.s"), bg=PAPER, fg=MUTED, font=self.f["body"], anchor="w", justify="left",
+                 wraplength=620).grid(row=2, column=0, sticky="w", pady=(4, 0))
+        box, self.q_tree, self.q_empty = self._table(
+            page,
+            [("date", t("col.date")), ("threat", t("col.threat")), ("original", t("col.original"))],
+            [150, 260, 400], "original")
+        box.grid(row=3, column=0, sticky="nsew", pady=(26, 0))
+        page.grid_rowconfigure(3, weight=1)
+        self.q_tree.bind("<<TreeviewSelect>>", lambda e: self._update_q_actions())
+        bottom = tk.Frame(page, bg=PAPER)
+        bottom.grid(row=4, column=0, sticky="ew", pady=(12, 0))
+        self.btn_restore = FlatButton(bottom, t("btn.restore"), self.restore_selected, "secondary", self.f["body"])
+        self.btn_restore.pack(side="left")
+        self.btn_delete = FlatButton(bottom, t("btn.delete"), self.delete_selected, "danger", self.f["body"])
+        self.btn_delete.pack(side="left", padx=(10, 0))
+        self.q_note = tk.Label(bottom, bg=PAPER, fg=MUTED, font=self.f["small"])
+        self.q_note.pack(side="left", padx=(16, 0))
+        self._refresh_quarantine()
+        return page
+
+    def _refresh_quarantine(self):
+        items = self.quarantine.list()
+        self.q_tree.delete(*self.q_tree.get_children())
+        for m in reversed(items):
+            date = m.get("date", "")
+            try:
+                date = datetime.fromisoformat(date).astimezone().strftime("%Y-%m-%d %H:%M")
+            except ValueError:
+                pass
+            self.q_tree.insert("", "end", iid=m["id"], values=(date, m.get("threat", ""), _short_path(m.get("original", ""))))
+        n = len(items)
+        self.q_h.configure(text=t("q.h_empty") if n == 0 else t("q.h", n=n))
+        self.q_empty.configure(text=t("q.h_empty"))
+        if n:
+            self.q_empty.place_forget()
+        else:
+            self.q_empty.place(relx=0.5, rely=0.5, anchor="center")
+        self._update_q_actions()
+        self._update_badges()
+
+    def _update_q_actions(self):
+        sel = bool(self.q_tree.selection())
+        self.btn_restore.set_enabled(sel)
+        self.btn_delete.set_enabled(sel)
+
+    def restore_selected(self):
+        ids = list(self.q_tree.selection())
+        ok, err = 0, None
+        for qid in ids:
+            try:
+                self.quarantine.restore(qid)
+                ok += 1
+            except (OSError, ValueError) as exc:
+                err = str(exc)
+        self._refresh_quarantine()
+        self.q_note.configure(text=err or t("q.restored_note", n=ok), fg=RED if err else MUTED)
+
+    def delete_selected(self):
+        ids = list(self.q_tree.selection())
+        if not ids:
+            return
+        if not messagebox.askyesno(t("q.confirm_title"), t("q.confirm", n=len(ids)), parent=self.root, icon="warning"):
+            return
+        for qid in ids:
+            try:
+                self.quarantine.delete(qid)
+            except OSError:
+                pass
+        self._refresh_quarantine()
+        self.q_note.configure(text=t("q.deleted_note", n=len(ids)), fg=MUTED)
+
+    # -------------------------------------------------------- settings
+    def _build_settings(self):
+        page = self._page("settings.eyebrow")
+        tk.Label(page, text=t("settings.h"), bg=PAPER, fg=INK, font=self.f["h1"], anchor="w").grid(
+            row=1, column=0, sticky="w", pady=(6, 0))
+        body = tk.Frame(page, bg=PAPER)
+        body.grid(row=2, column=0, sticky="nw", pady=(26, 0))
+        body.grid_columnconfigure(1, weight=1)
+        r = 0
+
+        def section(title):
+            nonlocal r
+            top = 0 if r == 0 else 26
+            tk.Label(body, text=title, bg=PAPER, fg=INK, font=self.f["h2"], anchor="nw", justify="left").grid(
+                row=r, column=0, sticky="nw", padx=(0, 44), pady=(top, 0))
+            holder = tk.Frame(body, bg=PAPER)
+            holder.grid(row=r, column=1, sticky="nw", pady=(top + 4, 0))
+            r += 1
+            return holder
+
+        def setter(attr):
+            def f(v):
+                setattr(self.cfg, attr, v)
+                self.cfg.save()
+            return f
+
+        s = section(t("set.detection"))
+        Check(s, t("set.heuristics"), self.cfg.heuristics, setter("heuristics"), self.f["body"]).pack(anchor="w")
+        Check(s, t("set.archives"), self.cfg.archives, setter("archives"), self.f["body"]).pack(anchor="w", pady=(10, 0))
+
+        s = section(t("set.found"))
+        Check(s, t("set.auto_q"), self.cfg.auto_quarantine, setter("auto_quarantine"), self.f["body"]).pack(anchor="w")
+        Check(s, t("set.auto_q_medium"), self.cfg.quarantine_medium, setter("quarantine_medium"), self.f["body"]).pack(anchor="w", pady=(10, 0))
+
+        s = section(t("set.signatures"))
+        self.sig_label = tk.Label(s, bg=PAPER, fg=MUTED, font=self.f["body"], anchor="w")
+        self.sig_label.pack(anchor="w")
+        self._update_sig_label()
+        row = tk.Frame(s, bg=PAPER)
+        row.pack(anchor="w", pady=(10, 0))
+        self.update_btn = FlatButton(row, t("btn.update"), self.update_signatures, "secondary", self.f["body"])
+        self.update_btn.pack(side="left")
+        self.update_note = tk.Label(row, bg=PAPER, fg=MUTED, font=self.f["small"])
+        self.update_note.pack(side="left", padx=(14, 0))
+        keyrow = tk.Frame(s, bg=PAPER)
+        keyrow.pack(anchor="w", pady=(10, 0))
+        tk.Label(keyrow, text=t("set.key"), bg=PAPER, fg=MUTED, font=self.f["small"]).pack(side="left")
+        self.key_var = tk.StringVar(value=self.cfg.abusech_key)
+        key = tk.Entry(keyrow, textvariable=self.key_var, width=34, bg=CARD, fg=INK, relief="flat",
+                       font=self.f["mono"], insertbackground=INK, highlightthickness=1,
+                       highlightbackground=RULE, highlightcolor=INK, show="•")
+        key.pack(side="left", padx=(10, 0), ipady=4)
+        key.bind("<FocusOut>", lambda e: self._save_key())
+
+        s = section(t("set.language"))
+        picker = FlatButton(s, f"{i18n.LANGS[i18n.current()]}   \u25be", None, "secondary", self.f["body"])
+        picker.pack(anchor="w")
+        menu = tk.Menu(self.root, tearoff=0, bg=CARD, fg=INK, activebackground=HOVER, activeforeground=INK,
+                       relief="flat", bd=1, font=self.f["body"])
+        for code, name in i18n.LANGS.items():
+            mark = "\u2713  " if code == i18n.current() else "     "
+            menu.add_command(label=mark + name, command=lambda c=code: self.set_language(c))
+        picker._command = lambda: menu.tk_popup(picker.winfo_rootx(), picker.winfo_rooty() + picker.winfo_height())
+        self.lang_note = tk.Label(s, bg=PAPER, fg=MUTED, font=self.f["small"], wraplength=440, justify="left")
+        self.lang_note.pack(anchor="w", pady=(8, 0) if i18n.current() not in i18n.HUMAN_TRANSLATED else 0)
+        if i18n.current() not in i18n.HUMAN_TRANSLATED:
+            self.lang_note.configure(text=t("set.lang_note"))
+
+        s = section(t("set.about"))
+        tk.Label(s, text=f"WeDontLikeIt {__version__}  ·  {platforms.system_name()}", bg=PAPER, fg=INK,
+                 font=self.f["body"], anchor="w").pack(anchor="w")
+        drow = tk.Frame(s, bg=PAPER)
+        drow.pack(anchor="w", pady=(6, 0))
+        tk.Label(drow, text=_short_path(str(platforms.data_dir()), 52), bg=PAPER, fg=MUTED, font=self.f["mono"]).pack(side="left")
+        LinkButton(drow, t("btn.open_data"), self.open_data_dir, self.f["small"]).pack(side="left", padx=(12, 0))
+        return page
+
+    def _save_key(self):
+        self.cfg.abusech_key = self.key_var.get().strip()
+        self.cfg.save()
+
+    def _update_sig_label(self):
+        h, p = self.db_counts
+        self.sig_label.configure(text=t("set.sig_count", h=h, p=p))
+
+    def update_signatures(self):
+        self._save_key()
+        self.update_btn.set_enabled(False)
+        self.update_note.configure(text=t("set.updating"), fg=MUTED)
+        key = self.cfg.abusech_key or os.environ.get("ABUSECH_AUTH_KEY") or None
+
+        def work():
+            try:
+                new, total = updater.update(platforms.user_signature_dir(), updater.DEFAULT_URL, key)
+                self.events.put(("update_ok", new, total))
+            except Exception as exc:  # noqa: BLE001
+                self.events.put(("update_error", str(exc)))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def open_data_dir(self):
+        d = platforms.data_dir()
+        d.mkdir(parents=True, exist_ok=True)
+        platforms.reveal(d)
+
+    def set_language(self, code):
+        if code == i18n.current():
+            return
+        if self.scan_state == "running":
+            self.lang_note.configure(text=t("set.busy"), fg=RED)
+            return
+        self.cfg.lang = code
+        self.cfg.save()
+        i18n.set_lang(code)
+        self._fonts()
+        self._style()
+        self.build()
+
+    # ---------------------------------------------------------- shared
+    def _db_counts(self):
+        try:
+            db = SignatureDB.default()
+            return len(db.hashes), len(db.patterns)
+        except (OSError, ValueError):
+            return 0, 0
+
+    def _update_header(self):
+        n = self.db_counts[0]
+        sigs = t("header.sigs", n=n)
+        self.header_info.configure(text=f"{sigs}   ·   v{__version__}")
+
+    def _update_footer(self):
+        lines = [t("side.last_scan")]
+        if self.cfg.last_scan:
+            res = t("side.clean") if self.cfg.last_scan_result == "clean" else t("side.threats")
+            sep = {"ja": "\u3001", "zh": "\uff0c"}.get(i18n.current(), ", ")
+            lines.append(f"{_ago(self.cfg.last_scan)}{sep}{res}")
+        else:
+            lines.append(t("side.never"))
+        lines.append("")
+        lines.append(t("side.watch_on") if self.watch_stop is not None else t("side.watch_off"))
+        self.side_footer.configure(text="\n".join(lines))
+
+    def _update_badges(self):
+        n = len(self.quarantine.list())
+        self.nav["quarantine"][3].configure(text=str(n) if n else "")
+        k = self._flagged_count()
+        self.nav["scan"][3].configure(text=str(k) if k else "", fg=RED)
+
+    def _drain(self):
+        updated_path = None
+        try:
+            for _ in range(5000):
+                ev = self.events.get_nowait()
+                kind = ev[0]
+                if kind == "file":
+                    _, path, dets = ev
+                    self.scan_files += 1
+                    updated_path = path
+                    if dets:
+                        if self._auto_quarantine(Path(path), dets):
+                            self.note.configure(text=t("note.auto"), fg=MUTED)
+                            self._update_badges()
+                        else:
+                            for d in dets:
+                                self._insert_detection(d)
+                elif kind == "done":
+                    res = ev[1]
+                    if res.cancelled:
+                        self.scan_state = "stopped"
+                    else:
+                        self.scan_state = "found" if self.detections else "clean"
+                        self.cfg.last_scan = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                        self.cfg.last_scan_result = "threats" if res.detections else "clean"
+                        self.cfg.save()
+                    self.scan_stop = None
+                    self._sort_findings()
+                    self._render_scan_state()
+                    self._update_footer()
+                    self._update_badges()
+                elif kind == "scan_error":
+                    self.scan_state = "stopped"
+                    self.scan_stop = None
+                    self._render_scan_state()
+                    self.note.configure(text=ev[1], fg=RED)
+                elif kind == "watch_hit":
+                    _, path, dets = ev
+                    worst = max(dets, key=lambda d: SEV_RANK[d.severity])
+                    moved = self._auto_quarantine(path, dets)
+                    key = "watch.hit_moved" if moved else "watch.hit"
+                    self._log(t(key, threat=worst.name, file=_short_path(str(path), 56)), "red")
+                    if not moved:
+                        for d in dets:
+                            self._insert_detection(d)
+                        if self.scan_state != "running":
+                            self.scan_state = "found"
+                            self._render_scan_state()
+                    self._update_badges()
+                elif kind == "watch_error":
+                    self._log(ev[1], "red")
+                    self.stop_watch()
+                elif kind == "update_ok":
+                    self.db_counts = self._db_counts()
+                    self.update_btn.set_enabled(True)
+                    self.update_note.configure(text=t("set.updated", new=ev[1], total=ev[2]), fg=GREEN)
+                    self._update_sig_label()
+                    self._update_header()
+                elif kind == "update_error":
+                    self.update_btn.set_enabled(True)
+                    self.update_note.configure(text=t("set.update_failed", err=ev[1])[:120], fg=RED)
+        except queue.Empty:
+            pass
+        if self.scan_state == "running":
+            self.scan_s.configure(text=t("scan.running_s", n=self.scan_files))
+            if updated_path:
+                width = max(self.current.winfo_width(), 300)
+                self.current.configure(text=_elide(updated_path, width // self.mono_char))
+            count = len(self.detections)
+            self.findings_count.configure(text=str(count) if count else "")
+            if count:
+                self.tree_empty.place_forget()
+        self.root.after(POLL_MS, self._drain)
+
+    def close(self):
+        if self.scan_stop:
+            self.scan_stop.set()
+        if self.watch_stop:
+            self.watch_stop.set()
+        self.root.destroy()
+
+    def run(self):
+        self.root.mainloop()
+
+
+def main() -> None:
+    if tk is None:
+        sys.exit("error: tkinter is not available. Install it (e.g. `sudo pacman -S tk`, "
+                 "`sudo apt install python3-tk`) or use the command line.")
+    App().run()
+
+
+if __name__ == "__main__":
+    main()

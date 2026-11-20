@@ -1,0 +1,6 @@
+# Known SHA-256 hashes.
+# Format: <sha256> <Threat.Name>
+# Run `wedontlikeit hash <file>` to get the hash of a sample.
+
+# The standard EICAR test file (harmless, made for testing antivirus software)
+275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f Test.EICAR

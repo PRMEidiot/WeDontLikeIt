@@ -1,0 +1,69 @@
+# Builds the desktop app and the command-line tool for Windows, macOS and Linux.
+# Run it by hand from the Actions tab, or push a tag: git tag v0.3.0 && git push --tags
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,  name: linux,       exe: "" }
+          - { os: windows-latest, name: windows,     exe: ".exe" }
+          - { os: macos-latest,   name: macos-arm64, exe: "" }
+          - { os: macos-13,       name: macos-x64,   exe: "" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build
+        shell: bash
+        run: |
+          pip install . pyinstaller==6.11.1
+          pyinstaller --onefile --name wedontlikeit --collect-data wedontlikeit run.py
+          pyinstaller --onefile --windowed --name WeDontLikeIt --collect-data wedontlikeit run_gui.py
+          mkdir out
+          mv "dist/wedontlikeit${{ matrix.exe }}" "out/wedontlikeit-cli-${{ matrix.name }}${{ matrix.exe }}"
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            ditto -c -k --keepParent dist/WeDontLikeIt.app "out/WeDontLikeIt-${{ matrix.name }}.zip"
+          else
+            mv "dist/WeDontLikeIt${{ matrix.exe }}" "out/WeDontLikeIt-${{ matrix.name }}${{ matrix.exe }}"
+          fi
+      - name: Smoke test (must flag EICAR)
+        shell: bash
+        run: |
+          mkdir sample
+          python -c "open('sample/eicar.com','w').write(r'X5O!P%@AP[4\PZX54(P^)7CC)7}\$EICAR-STANDARD-' + 'ANTIVIRUS-TEST-FILE!\$H+H*')"
+          cli="out/wedontlikeit-cli-${{ matrix.name }}${{ matrix.exe }}"
+          "$cli" --version
+          set +e; "$cli" scan sample; rc=$?; set -e
+          test "$rc" = "1"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: out/*
+
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
