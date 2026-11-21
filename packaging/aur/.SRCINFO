@@ -1,6 +1,6 @@
 pkgbase = wedontlikeit
 	pkgdesc = A small antivirus written in plain Python, with a desktop app and a command-line tool
-	pkgver = 0.5.1
+	pkgver = 0.5.2
 	pkgrel = 1
 	url = https://github.com/PRMEidiot/WeDontLikeIt
 	arch = any
@@ -13,7 +13,7 @@ pkgbase = wedontlikeit
 	depends = tk
 	depends = hicolor-icon-theme
 	optdepends = python-yara: YARA rule support
-	source = wedontlikeit-0.5.1.tar.gz::https://github.com/PRMEidiot/WeDontLikeIt/archive/refs/tags/v0.5.1.tar.gz
-	sha256sums = 9c4cf88f2e1de3340406141385fa7f88871362574fa3a8c46737a1fe4323652a
+	source = wedontlikeit-0.5.2.tar.gz::https://github.com/PRMEidiot/WeDontLikeIt/archive/refs/tags/v0.5.2.tar.gz
+	sha256sums = e96629c81080617def656e6bf995a18dfb84eb57a0c4906d2f2f737829599a13
 
 pkgname = wedontlikeit
