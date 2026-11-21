@@ -8,7 +8,7 @@ It comes as a desktop app and as a command-line tool. Both use the same engine.
 It's open source under the MIT License. You're free to build on it, as long as you give credit
 ([details](#open-source-and-giving-credit)).
 
-![The scan page after finding a few things, in the light theme](https://raw.githubusercontent.com/PRMEidiot/WeDontLikeIt/main/docs/screenshot-light.png)
+![Scanning a Downloads folder, finding three files, quarantining one, then switching themes](https://raw.githubusercontent.com/PRMEidiot/WeDontLikeIt/main/docs/demo.gif)
 
 <table>
   <tr>

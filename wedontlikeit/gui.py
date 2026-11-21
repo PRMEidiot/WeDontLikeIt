@@ -1448,7 +1448,7 @@ class App:
             self.scan_s.configure(text=t("scan.running_s", n=self.scan_files))
             if updated_path:
                 width = max(self.current.winfo_width(), 300)
-                self.current.configure(text=_elide(updated_path, width // self.mono_char))
+                self.current.configure(text=_elide(_short_path(updated_path, 400), width // self.mono_char))
             count = len(self.detections)
             self.findings_count.configure(text=str(count) if count else "")
             if count:
