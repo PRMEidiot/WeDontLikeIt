@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wedontlikeit"
-version = "0.5.1"
+version = "0.5.2"
 description = "A small antivirus for Linux, Windows and macOS, written in plain Python. Desktop app and CLI."
 readme = "README.md"
 license = "MIT"

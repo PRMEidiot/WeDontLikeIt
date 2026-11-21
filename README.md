@@ -215,7 +215,7 @@ wedontlikeit/
   config.py      saved settings
 ```
 
-GitHub Actions runs the tests on Windows, macOS and Linux on every push. Pushing a tag like `v0.5.1`
+GitHub Actions runs the tests on Windows, macOS and Linux on every push. Pushing a tag like `v0.5.2`
 builds the apps and attaches them to a release.
 
 One rule worth knowing: the test suite scans the project itself and fails if anything is flagged.
